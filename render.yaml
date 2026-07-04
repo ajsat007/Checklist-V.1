@@ -1,25 +1,30 @@
 # Render Blueprint — deploy with "New + → Blueprint" after pushing to GitHub.
 #
-# IMPORTANT — database durability:
-#   The `disk` section below gives the SQLite database a persistent volume so
-#   inspection data SURVIVES deploys and restarts. Persistent disks require the
-#   Starter plan (paid). On the FREE plan, delete the `disk:` block and the
-#   DATA_DIR env var — the app will run, but ALL DATA IS WIPED whenever the
-#   service restarts or redeploys (fine for testing, not for real records).
+# CONFIGURED FOR THE FREE PLAN.
+#   ⚠️ Free plan = NO persistent disk: the SQLite database is WIPED whenever
+#   the service redeploys, restarts, or wakes from sleep (it sleeps after
+#   ~15 min idle; the next request takes ~50 s to wake it).
+#   - Master data (districts/stations/employees) is SAFE — it re-imports from
+#     the committed CSV files on every boot.
+#   - Inspection records are NOT safe — download snapshots regularly from
+#     /backup?key=<ADMIN_KEY>  (key is in the service's Environment tab).
+#
+# UPGRADE LATER (real data safety, ~$7/mo): set `plan: starter` and uncomment
+# the disk + DATA_DIR lines below, then push.
 services:
   - type: web
     name: msrtc-checklist
     runtime: node
-    plan: starter          # change to `free` for testing (see warning above)
+    plan: free
     buildCommand: ""       # zero dependencies — nothing to build
     startCommand: node server/server.js
     healthCheckPath: /health
     envVars:
-      - key: DATA_DIR
-        value: /data       # store the SQLite file on the persistent disk
       - key: ADMIN_KEY
-        generateValue: true  # enables GET /backup?key=... (see Render dashboard for the value)
-    disk:
-      name: msrtc-data
-      mountPath: /data
-      sizeGB: 1
+        generateValue: true  # enables GET /backup?key=... (value shown in dashboard)
+      # - key: DATA_DIR      # ← uncomment when upgrading to starter + disk
+      #   value: /data
+    # disk:                  # ← uncomment when upgrading to starter
+    #   name: msrtc-data
+    #   mountPath: /data
+    #   sizeGB: 1

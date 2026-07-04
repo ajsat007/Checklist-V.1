@@ -102,8 +102,18 @@ git push -u origin main
 | **Starter (~$7/mo)** + the 1 GB disk in `render.yaml` | ✅ Safe. DB lives on a persistent disk (`/data`), survives deploys/restarts. |
 | **Free** | ⚠️ Filesystem is wiped on every deploy/restart/idle-wake, and the service sleeps after 15 min (first request then takes ~50 s). OK for **testing only** — real inspection records will be lost. |
 
-To try free first: in `render.yaml` set `plan: free` and delete the `disk:`
-block and the `DATA_DIR` env var. Switch back before real use.
+`render.yaml` is currently configured for the **free plan**. To upgrade later:
+set `plan: starter` and uncomment the `disk:` block and `DATA_DIR` env var in
+`render.yaml`, then `git push` — Render applies it automatically.
+
+**Free-plan survival guide:**
+- Master data is safe: `data/locations.csv` + `data/employees.csv` re-import on
+  every boot because they ship with the code.
+- Inspection records are NOT safe — **download `/backup?key=<ADMIN_KEY>`
+  regularly** (e.g. every evening). The key is in the service's *Environment* tab.
+- Reduce sleep-wakes (and ~50 s cold starts): create a free monitor at
+  [uptimerobot.com](https://uptimerobot.com) that pings
+  `https://<your-app>/health` every 10 minutes.
 
 Your real master data deploys with the code: commit `data/locations.csv` and
 `data/employees.csv` (they are *not* gitignored — only `app.db` is) and every
