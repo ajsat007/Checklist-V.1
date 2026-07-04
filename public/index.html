@@ -211,12 +211,17 @@
     <button class="magil-refresh-btn" onclick="loadMagilReports()" aria-label="पुन्हा लोड" title="पुन्हा लोड">🔄</button>
   </div>
   <div id="magilEmpBadge" class="magil-emp-badge" style="display:none"></div>
-  <!-- DATE FILTER BAR -->
+  <!-- FILTER BAR: date + search within your own reports -->
   <div class="magil-filter-bar">
     <label for="magilDateFilter">📅 तारीख:</label>
     <input type="date" id="magilDateFilter" class="magil-date-inp" onchange="loadMagilReports()" />
     <button onclick="setMagilDateToday()" class="qd-btn btn-sm" style="min-height:34px;font-size:11px">आज</button>
     <button onclick="clearMagilDateFilter()" class="qd-btn btn-sm" style="min-height:34px;font-size:11px">सर्व</button>
+  </div>
+  <div class="magil-filter-bar">
+    <input type="text" id="magilSearchInp" class="magil-date-inp" style="flex:1"
+           placeholder="🔍 टोकन किंवा स्थानक शोधा" onkeyup="if(event.key==='Enter')loadMagilReports()" />
+    <button onclick="loadMagilReports()" class="qd-btn btn-sm" style="min-height:34px;font-size:11px">शोधा</button>
   </div>
   <div id="magilSummary" class="magil-summary" style="display:none"></div>
   <div id="magilList" class="magil-list">

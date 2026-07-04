@@ -692,24 +692,12 @@ function confirmDeleteSession(sessionId, tokenId){
     var r; try{r=JSON.parse(resStr);}catch(e){toast('पार्स त्रुटी.','error');return;}
     if (!r.ok){ toast(r.msg||'हटवता आले नाही.','error',5000); return; }
     toast(r.msg||'🗑 हटवले.','success',4000);
-    // FIX (delete): purge from the in-memory lists too, then re-render —
-    // removing only the DOM card let filter taps bring the entry back.
-    _magilMaster = _magilMaster.filter(function(x){ return x.sessionId!==sessionId; });
-    _magilAll    = _magilAll.filter(function(x){ return x.sessionId!==sessionId; });
+    // Remove the card immediately, then reload the current page so server-side
+    // counts and paging stay correct in the full-history view.
     var card = document.querySelector('.magil-card-actions button[onclick*="'+sessionId+'"]');
     if (card){ var c = card.closest('.magil-card'); if (c) c.remove(); }
-    // refresh the summary chips with the new counts
-    var done=0, todo=0, pdf=0;
-    _magilMaster.forEach(function(x){ if(x.status==='Completed')done++; else todo++; if(x.pdfUrl)pdf++; });
-    var sumEl=document.getElementById('magilSummary');
-    if (sumEl && _magilMaster.length){
-      sumEl.innerHTML=
-        '<span class="magil-summary-chip mfc'+(_magilFilter==='all'?' sel':'')+'" data-f="all" onclick="magilFilter(\'all\')">📊 एकूण: '+_magilMaster.length+'</span>'+
-        '<span class="magil-summary-chip mfc ok'+(_magilFilter==='done'?' sel':'')+'" data-f="done" onclick="magilFilter(\'done\')">✅ पूर्ण: '+done+'</span>'+
-        '<span class="magil-summary-chip mfc warn'+(_magilFilter==='todo'?' sel':'')+'" data-f="todo" onclick="magilFilter(\'todo\')">⏳ अपूर्ण: '+todo+'</span>'+
-        '<span class="magil-summary-chip mfc'+(_magilFilter==='pdf'?' sel':'')+'" data-f="pdf" onclick="magilFilter(\'pdf\')">📄 PDF: '+pdf+'</span>';
-    } else if (sumEl){ sumEl.style.display='none'; _magilShowEmpty(null); }
-  }, function(){showLoad(false);toast('नेटवर्क त्रुटी.','error');}, sessionId, G.emp.id);
+    loadMagilReports();
+  }, function(){showLoad(false);toast('नेटवर्क त्रुटी.','error');}, sessionId, (G.emp&&G.emp.id)||'');
 }
 
 /* EDIT: load a submitted record, let the user pick which unit to correct. */
@@ -2082,14 +2070,17 @@ var MAGIL_TYPE_LABEL = {
   bs:'बसस्थानक (दैनंदिन)', bw:'बसेस (दैनंदिन)', gh:'विश्रांतीगृह (दैनंदिन)', wr:'प्रसाधनगृह (दैनंदिन)',
   es:'बसस्थानक (साप्ताहिक)', gh_w:'विश्रांतीगृह (साप्ताहिक)', bm:'बसेस (मासिक)', sm:'बसस्थानक (मासिक)'
 };
-var _magilMaster = [];
-var _magilAll = [];
-var _magilFilter = 'all';
-var _magilShown = 0;
-var MAGIL_PAGE = 20;
+// माघील अहवाल = ALL supervisors' full history, fetched from the server one page
+// at a time (the full set is ~24k rows / 10 MB — too big to load at once).
+var _magilStatus = 'all';       // active status chip: all|done|todo|pdf
+var _magilOffset = 0;           // paging cursor
+var _magilLimit = 60;           // must match server LIMIT
+var _magilTotal = 0;
+var _magilLoadingMore = false;
 var _magilDeepLoaded = {};
 
 function openMagilScr(){
+  // Privacy: a supervisor sees only THEIR OWN history — login required.
   if (!G.emp){ toast('आधी कर्मचारी आयडी टाका.','error'); document.getElementById('empid').focus(); return; }
   var badge=document.getElementById('magilEmpBadge');
   badge.style.display='flex';
@@ -2106,80 +2097,79 @@ function closeMagilScr(){ document.getElementById('magilScr').classList.remove('
 function setMagilDateToday(){ document.getElementById('magilDateFilter').value = istDate(); loadMagilReports(); }
 function clearMagilDateFilter(){ document.getElementById('magilDateFilter').value=''; loadMagilReports(); }
 
+/* Fresh load (reset to page 0). Used by open, filters, date, refresh. */
 function loadMagilReports(_retry){
   if (!G.emp) return;
   _retry = _retry || 0;
+  _magilOffset = 0;
   _magilShowSkeleton();
-  var dateVal = document.getElementById('magilDateFilter').value || '';
-  gRun('getMyReports', function(resStr){ _magilHandleResponse(resStr); },
-       function(){
-         // A single transport failure (cold start, brief network drop) should
-         // not dead-end the screen. Auto-retry a couple of times with backoff,
-         // then fall back to a manual Retry button instead of a static error.
-         if (_retry < 2){ setTimeout(function(){ loadMagilReports(_retry + 1); }, 1200 * (_retry + 1)); return; }
-         _magilShowError('नेटवर्क त्रुटी — पुन्हा प्रयत्न करा.');
-       },
-       G.emp.id, dateVal);
+  _magilFetch(_retry, true);
 }
 
-function _magilHandleResponse(resStr){
-  var r; try { r = JSON.parse(resStr); } catch(e){ _magilShowEmpty('डेटा त्रुटी.'); return; }
-  if (!r || !r.ok){ _magilShowEmpty((r&&r.msg)||'अहवाल आढळले नाहीत.'); return; }
-  // FIX: getSupervisorReports has always returned the
-  // array under `results`, never `reports` — this one field-name mismatch
-  // was the actual reason माघील अहवाल showed empty for every supervisor
-  // regardless of how much real data existed server-side.
-  _magilMaster = r.results || [];
-  _magilAll = _magilMaster.slice();
-  _magilFilter = 'all';
-  _magilShown = 0;
+/* Append the next page (server paging). */
+function _magilLoadMore(btn){
+  if (_magilLoadingMore) return;
+  _magilLoadingMore = true;
+  if (btn) btn.textContent = 'लोड होत आहे…';
+  _magilOffset += _magilLimit;
+  _magilFetch(0, false);
+}
 
-  var done=0, todo=0, pdf=0;
-  _magilMaster.forEach(function(x){ if(x.status==='Completed')done++; else todo++; if(x.pdfUrl)pdf++; });
+function _magilFetch(_retry, reset){
+  if (!G.emp) return;
+  var dateVal   = document.getElementById('magilDateFilter').value || '';
+  var searchVal = (document.getElementById('magilSearchInp')||{}).value || '';
+  gRun('getMyReportsPaged', function(resStr){
+    _magilLoadingMore = false;
+    _magilHandleResponse(resStr, reset);
+  }, function(){
+    _magilLoadingMore = false;
+    // Transient failure → auto-retry a couple of times with backoff.
+    if (_retry < 2){ setTimeout(function(){ _magilFetch(_retry + 1, reset); }, 1200 * (_retry + 1)); return; }
+    if (reset) _magilShowError('नेटवर्क त्रुटी — पुन्हा प्रयत्न करा.');
+    else toast('अधिक लोड करता आले नाही — पुन्हा प्रयत्न करा.','error');
+  }, G.emp.id, dateVal, _magilStatus, _magilOffset, searchVal);
+}
 
+function _magilHandleResponse(resStr, reset){
+  var r; try { r = JSON.parse(resStr); } catch(e){ if(reset)_magilShowEmpty('डेटा त्रुटी.'); return; }
+  if (!r || !r.ok){ if(reset)_magilShowEmpty((r&&r.msg)||'अहवाल आढळले नाहीत.'); return; }
+  _magilTotal = r.total || 0;
+  var c = r.counts || {all:0,done:0,todo:0,pdf:0};
+
+  // Summary chips reflect the SERVER counts (whole filtered history, not just
+  // the loaded page). Clicking one re-queries the server with that status.
   var sumEl=document.getElementById('magilSummary');
-  if (_magilMaster.length){
-    sumEl.style.display='flex';
-    sumEl.innerHTML=
-      '<span class="magil-summary-chip mfc sel" data-f="all" onclick="magilFilter(\'all\')">📊 एकूण: '+_magilMaster.length+'</span>'+
-      '<span class="magil-summary-chip mfc ok" data-f="done" onclick="magilFilter(\'done\')">✅ पूर्ण: '+done+'</span>'+
-      '<span class="magil-summary-chip mfc warn" data-f="todo" onclick="magilFilter(\'todo\')">⏳ अपूर्ण: '+todo+'</span>'+
-      '<span class="magil-summary-chip mfc" data-f="pdf" onclick="magilFilter(\'pdf\')">📄 PDF: '+pdf+'</span>';
-    _magilRenderPage(true);
-  } else {
-    sumEl.style.display='none';
-    _magilShowEmpty(null);
-  }
-}
+  sumEl.style.display='flex';
+  sumEl.innerHTML=
+    '<span class="magil-summary-chip mfc'+(_magilStatus==='all'?' sel':'')+'" data-f="all" onclick="magilFilter(\'all\')">📊 एकूण: '+c.all+'</span>'+
+    '<span class="magil-summary-chip mfc ok'+(_magilStatus==='done'?' sel':'')+'" data-f="done" onclick="magilFilter(\'done\')">✅ पूर्ण: '+c.done+'</span>'+
+    '<span class="magil-summary-chip mfc warn'+(_magilStatus==='todo'?' sel':'')+'" data-f="todo" onclick="magilFilter(\'todo\')">⏳ अपूर्ण: '+c.todo+'</span>'+
+    '<span class="magil-summary-chip mfc'+(_magilStatus==='pdf'?' sel':'')+'" data-f="pdf" onclick="magilFilter(\'pdf\')">📄 PDF: '+c.pdf+'</span>';
 
-function magilFilter(f){
-  _magilFilter = f;
-  document.querySelectorAll('.magil-summary-chip.mfc').forEach(function(c){
-    c.classList.toggle('sel', c.getAttribute('data-f')===f);
-  });
-  if (f==='all') _magilAll = _magilMaster.slice();
-  else if (f==='done') _magilAll = _magilMaster.filter(function(x){return x.status==='Completed';});
-  else if (f==='todo') _magilAll = _magilMaster.filter(function(x){return x.status!=='Completed';});
-  else if (f==='pdf')  _magilAll = _magilMaster.filter(function(x){return !!x.pdfUrl;});
-  _magilShown = 0;
-  _magilRenderPage(true);
-}
-
-function _magilRenderPage(reset){
-  var list = document.getElementById('magilList');
+  var list=document.getElementById('magilList');
   if (reset) list.innerHTML='';
-  if (!_magilAll.length){ _magilShowEmpty(null); return; }
-  var slice = _magilAll.slice(_magilShown, _magilShown+MAGIL_PAGE);
-  _magilShown += slice.length;
-  var html = slice.map(_magilCardHtml).join('');
-  list.insertAdjacentHTML('beforeend', html);
-  if (_magilShown < _magilAll.length){
+  var oldMore=document.getElementById('magilMoreBtn'); if(oldMore) oldMore.remove();
+
+  var rows = r.results || [];
+  if (reset && !rows.length){ sumEl.style.display='none'; _magilShowEmpty(null); return; }
+  list.insertAdjacentHTML('beforeend', rows.map(_magilCardHtml).join(''));
+
+  var shown = (r.offset||0) + rows.length;
+  if (r.hasMore){
     var more=document.createElement('button');
+    more.id='magilMoreBtn';
     more.className='btn btn-outline'; more.style.cssText='width:100%;margin-top:6px';
-    more.textContent='अधिक दाखवा ('+(_magilAll.length-_magilShown)+')';
-    more.onclick=function(){ more.remove(); _magilRenderPage(false); };
+    more.textContent='अधिक दाखवा ('+Math.max(0,(_magilTotal - shown))+' शिल्लक)';
+    more.onclick=function(){ _magilLoadMore(more); };
     list.appendChild(more);
   }
+}
+
+/* Status chip → re-query the server (counts stay accurate across all pages). */
+function magilFilter(f){
+  _magilStatus = f;
+  loadMagilReports();
 }
 
 function _magilCardHtml(x){
@@ -2255,7 +2245,7 @@ function magilToggleDetail(cardEl, sessionId){
       if (!r || !r.ok){ det.innerHTML='<p class="muted center">तपशील आढळले नाहीत.</p>'; return; }
       _magilDeepLoaded[sessionId]=true;
       _magilRenderDeep(det, r);
-    }, function(){ det.innerHTML='<p class="muted center">नेटवर्क त्रुटी.</p>'; }, sessionId, G.emp.id);
+    }, function(){ det.innerHTML='<p class="muted center">नेटवर्क त्रुटी.</p>'; }, sessionId, (G.emp&&G.emp.id)||'');
   }
 }
 
@@ -2297,13 +2287,11 @@ function magilRequestPDF(sessionId, btnEl){
           if (oldBtn) oldBtn.outerHTML = '<a href="'+esc(r.pdfUrl)+'" target="_blank" rel="noopener" class="magil-pdf-btn">📄 PDF</a>';
         }
       }
-      var item=_magilMaster.find(function(x){return x.sessionId===sessionId;});
-      if (item) item.pdfUrl=r.pdfUrl;
       toast('✅ PDF तयार झाली!','success',2500);
     } else {
       _magilPdfError(btnEl, r&&r.msg);
     }
-  }, function(){ delete _magilGenerating[sessionId]; _magilPdfError(btnEl); }, sessionId, G.emp.id);
+  }, function(){ delete _magilGenerating[sessionId]; _magilPdfError(btnEl); }, sessionId, (G.emp&&G.emp.id)||'');
 }
 function _magilPdfError(btnEl, msg){
   if (btnEl){ btnEl.disabled=false; btnEl.classList.remove('generating'); btnEl.textContent='📄 तयार करा'; }

@@ -28,7 +28,7 @@ const ALLOWED = new Set([
   'submitAllShifts', 'submitFullChecklist', 'saveBusEntry', 'saveBus',
   'finalizeBusSession', 'finalizeInspection', 'updateUnitAnswers', 'editShift', 'editBus',
   'deleteSession', 'getSessionForEdit', 'resumeSession', 'listIncompleteSessions',
-  'getMyReports', 'getSupervisorReports', 'getSessionDetail', 'getReportFullDetail',
+  'getMyReports', 'getSupervisorReports', 'getMyReportsPaged', 'getSessionDetail', 'getReportFullDetail',
   'generateSessionPdf', 'generatePdfNow', 'regeneratePDFForSession', 'getSessionPdf',
   'searchReports', 'searchPastInspections', 'peekContinuationSession'
 ]);

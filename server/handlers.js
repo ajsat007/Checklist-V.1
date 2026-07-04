@@ -413,6 +413,64 @@ H.getSupervisorReports = function (empId, filterDate) {
 };
 H.getMyReports = H.getSupervisorReports;
 
+/* माघील अहवाल — the logged-in supervisor's OWN history only, server-paged.
+   (Privacy: a supervisor sees only their own reports.) Paging keeps it fast
+   even for the busiest supervisors (300+ records). Returns one page plus
+   total + chip counts + hasMore. Optional filters: date (yyyy-MM-dd),
+   status ('done'|'todo'|'pdf'), and a free-text search over token/station. */
+H.getMyReportsPaged = function (empId, filterDate, status, offset, search) {
+  const id = _s(empId);
+  if (!id) return { ok: false, msg: 'कर्मचारी आयडी आवश्यक आहे.' };
+  const LIMIT = 60;
+  offset = Math.max(0, parseInt(offset, 10) || 0);
+
+  // Always scoped to this supervisor. Shared by both counts and the page query.
+  const where = ['employee_id=?'], args = [id];
+  if (filterDate && /^\d{4}-\d{2}-\d{2}$/.test(String(filterDate))) { where.push('created_date=?'); args.push(_isoToDDMM(filterDate)); }
+  const sTerm = String(search || '').trim();
+  if (sTerm) {
+    const like = '%' + sTerm + '%';
+    where.push('(token_id LIKE ? OR station LIKE ?)');
+    args.push(like, like);
+  }
+
+  // Chip counts reflect the date/search filter but NOT the status chip
+  // (so the user always sees how many done/todo/pdf exist within the filter).
+  const baseSql = 'WHERE ' + where.join(' AND ');
+  const c = db.prepare("SELECT COUNT(*) a, " +
+    "SUM(CASE WHEN status='" + STATUS.COMPLETED + "' THEN 1 ELSE 0 END) d, " +
+    "SUM(CASE WHEN status!='" + STATUS.COMPLETED + "' THEN 1 ELSE 0 END) t, " +
+    "SUM(CASE WHEN pdf_url!='' THEN 1 ELSE 0 END) p FROM sessions " + baseSql).get(...args);
+
+  // Page query adds the status filter.
+  const pageWhere = where.slice(), pageArgs = args.slice();
+  if (status === 'done') pageWhere.push("status='" + STATUS.COMPLETED + "'");
+  else if (status === 'todo') pageWhere.push("status!='" + STATUS.COMPLETED + "'");
+  else if (status === 'pdf') pageWhere.push("pdf_url!=''");
+  const pageSql = pageWhere.length ? ('WHERE ' + pageWhere.join(' AND ')) : '';
+
+  const total = db.prepare('SELECT COUNT(*) c FROM sessions ' + pageSql).get(...pageArgs).c;
+  const rows = db.prepare('SELECT * FROM sessions ' + pageSql + ' ORDER BY session_id DESC LIMIT ? OFFSET ?')
+    .all(...pageArgs, LIMIT, offset);
+
+  const results = rows.map(r => {
+    const t = String(r.created_time || '').split(' ');
+    return {
+      sessionId: r.session_id, tokenId: r.token_id, district: r.district, station: r.station,
+      supervisor: r.supervisor_name, employeeId: r.employee_id, checklist: r.checklist_type,
+      checklistKey: r.checklist_key, createdTime: r.created_time,
+      dateDisp: t[0] || '', timeDisp: t[1] || '', progressLabel: _progressLabel(r),
+      status: r.status, pdfUrl: r.pdf_url || ''
+    };
+  });
+
+  return {
+    ok: true, results: results, total: total, offset: offset, limit: LIMIT,
+    hasMore: (offset + rows.length) < total,
+    counts: { all: c.a || 0, done: c.d || 0, todo: c.t || 0, pdf: c.p || 0 }
+  };
+};
+
 H.getReportFullDetail = function (sessionId, requestingEmpId) {
   const row = _getSession(sessionId);
   if (!row) return { ok: false, msg: 'तपशील आढळले नाहीत.' };
