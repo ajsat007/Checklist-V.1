@@ -1,0 +1,11 @@
+{
+  "name": "msrtc-checklist",
+  "version": "1.0.0",
+  "description": "MSRTC Smart Mechanized Cleaning — plain HTML/CSS/JS frontend + zero-dependency Node.js/SQLite backend",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "seed": "node server/seed.js"
+  },
+  "engines": { "node": ">=22.13" }
+}

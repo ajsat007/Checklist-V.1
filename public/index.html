@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+  <base target="_top" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0B2A4A" />
+  <title>MSRTC Smart Mechanized Cleaning</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" /></noscript>
+
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+<div id="splash" style="
+  position:fixed;inset:0;z-index:99999;
+  background:linear-gradient(160deg,#0B2A4A,#123A63);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;
+  transition:opacity .4s ease">
+  <img src="https://i.postimg.cc/wTv6Pdyd/Screenshot-2026-05-28-235556-removebg-preview.png"
+       style="height:60px;width:auto" />
+  <div style="width:44px;height:44px;border:4px solid rgba(255,255,255,.2);
+       border-top-color:#E8A23D;border-radius:50%;
+       animation:spin .75s linear infinite"></div>
+  <p style="color:rgba(255,255,255,.75);font-size:13px;font-weight:700">
+    लोड होत आहे…</p>
+  <p style="color:rgba(255,255,255,.45);font-size:11px">
+    MSRTC Smart Mechanized Cleaning</p>
+</div>
+<!-- OFFLINE BANNER -->
+<div id="offlineBanner">📶 इंटरनेट उपलब्ध नाही — डेटा स्थानिक जतन होत आहे</div>
+
+<!-- BACKGROUND SYNC STATUS (tap to retry) -->
+<div id="syncChip" class="sync-chip hide" onclick="_obFailStreak=0;_obKick(10)"></div>
+
+<!-- LOADING OVERLAY -->
+<div id="loadOv">
+  <div class="loader-card">
+    <img src="https://i.postimg.cc/wTv6Pdyd/Screenshot-2026-05-28-235556-removebg-preview.png"
+         alt="Smart Services" style="height:30px;width:auto;object-fit:contain" />
+    <div class="spinner"></div>
+    <p style="color:var(--navy);font-weight:900;font-size:14px">माहिती जतन होत आहे…</p>
+    <p class="muted center">कृपया प्रतीक्षा करा</p>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- RESUME DIALOG -->
+<div id="resumeDlg" class="dlg-ov">
+  <div class="dlg-card">
+    <div style="font-size:38px;margin-bottom:6px;text-align:center">📋</div>
+    <h3 style="color:var(--navy);font-size:17px;font-weight:900;text-align:center;margin-bottom:6px">मागील सत्र उपलब्ध</h3>
+    <p style="color:var(--txt-mid);font-size:12px;text-align:center;margin-bottom:10px">अपूर्ण चेकलिस्ट सत्र आढळले.</p>
+    <div id="resumeInfo" style="color:var(--navy);font-size:11px;font-weight:600;background:var(--bg);padding:10px 12px;border-radius:var(--r-sm);margin-bottom:16px;white-space:pre-line;line-height:1.65;border:1px solid var(--line-md)"></div>
+    <div class="gap-row">
+      <button onclick="resumeSession()" class="btn btn-primary" style="font-size:14px">▶ सुरू ठेवा</button>
+      <button onclick="startNewSession()" class="btn btn-back">नवीन</button>
+    </div>
+  </div>
+</div>
+
+<!-- REMARK DIALOG -->
+<div id="remarkDlg" class="dlg-ov">
+  <div class="dlg-card">
+    <div style="font-size:36px;margin-bottom:4px;text-align:center">📝</div>
+    <h3 style="color:var(--err);font-size:17px;font-weight:900;text-align:center;margin-bottom:3px">शेरा लिहा</h3>
+    <p style="color:var(--txt-mid);font-size:12px;text-align:center">"नाही" साठी कारण आवश्यक आहे</p>
+    <div id="remarkQ" class="remark-q"></div>
+    <textarea id="remarkInp" class="remark-ta" placeholder="कारण किंवा शेरा येथे लिहा…" maxlength="300"></textarea>
+    <p style="font-size:10px;color:var(--txt-lt);margin-top:3px;text-align:right"><span id="remarkCnt">0</span>/300</p>
+    <div class="gap-row" style="margin-top:12px">
+      <button onclick="cancelRemark()" class="btn btn-back" style="font-size:13px">रद्द करा</button>
+      <button onclick="submitRemark()" class="btn btn-primary" style="font-size:14px">✔ जतन करा</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHIFT / UNIT DONE MODAL -->
+<div id="shiftModal" class="modal-ov">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-icon">✅</div>
+    <h3 id="shiftModalTitle" class="modal-title">नोंद पूर्ण!</h3>
+    <p id="shiftModalMsg" class="modal-msg"></p>
+    <div class="gap-col">
+      <button id="nextShiftBtn" onclick="continueNextShift()" class="btn btn-gold">पुढे →</button>
+      <button onclick="endInspection()" class="btn btn-outline">🏁 चेकलिस्ट समाप्त करा</button>
+    </div>
+  </div>
+</div>
+
+<!-- 6-SHIFT COMPLETE REMINDER MODAL -->
+<div id="allShiftsDoneModal" class="modal-ov">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-icon">🎉</div>
+    <h3 class="modal-title" style="color:var(--ok)">सर्व ६ पाळी पूर्ण!</h3>
+    <p class="modal-msg">तुम्ही आजचे ६ शिफ्ट पूर्ण केले! माघील अहवाल पहा.</p>
+    <div class="gap-col">
+      <button onclick="openMagilScrFromShiftModal()" class="btn btn-gold">📋 माघील अहवाल पहा</button>
+      <button onclick="hideModal('allShiftsDoneModal')" class="btn btn-back">बंद करा</button>
+    </div>
+  </div>
+</div>
+
+<!-- BUS DONE MODAL -->
+<div id="busModal" class="modal-ov">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-icon">✅</div>
+    <h3 id="busModalTitle" class="modal-title">बस नोंद झाली!</h3>
+    <p id="busModalMsg" class="modal-msg"></p>
+    <div class="gap-col" style="margin-top:4px">
+      <button onclick="addNextBus()" class="btn btn-ok" style="font-size:16px;padding:14px 10px">
+        🚌 पुढील बस जोडा
+      </button>
+      <button onclick="repeatLastBus()" class="btn btn-gold" style="font-size:15px;padding:13px 10px">
+        🔁 हीच बस पुन्हा धुतली
+      </button>
+      <button onclick="endBusInspection()" class="btn btn-outline" style="font-size:15px;padding:13px 10px;border-color:var(--navy);color:var(--navy)">
+        🏁 बस धुणे समाप्त करा — PDF तयार करा
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- BUS REPEAT-WASH CONFIRM MODAL -->
+<div id="busRepeatModal" class="modal-ov">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-icon">🔁</div>
+    <h3 class="modal-title">पुन्हा धुलाई नोंदवायची?</h3>
+    <p id="busRepeatMsg" class="modal-msg"></p>
+    <div class="gap-col">
+      <button onclick="confirmBusRepeat()" class="btn btn-ok">🔁 होय, पुन्हा नोंदवा</button>
+      <button onclick="hideModal('busRepeatModal')" class="btn btn-back">रद्द करा</button>
+    </div>
+  </div>
+</div>
+
+<!-- ALREADY-COMPLETED NOTIFICATION MODAL -->
+<div id="completedModal" class="modal-ov">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-icon">✅</div>
+    <h3 class="modal-title">चेकलिस्ट आधीच पूर्ण</h3>
+    <p id="completedMsg" class="modal-msg"></p>
+    <div class="gap-col">
+      <a id="completedPdfLink" href="#" target="_blank" rel="noopener" class="btn btn-primary" style="width:100%;text-decoration:none">📄 PDF पहा</a>
+      <button onclick="completedDismiss()" class="btn btn-back" style="width:100%">ठीक आहे</button>
+    </div>
+  </div>
+</div>
+
+<!-- PDF CONFIRM MODAL -->
+<!-- FIX 2: only one button — no dismiss button, so the PDF confirmation
+     can never be accidentally cancelled (which previously led to double-submit). -->
+<div id="pdfModal" class="modal-ov">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-icon">📄</div>
+    <h3 class="modal-title">PDF अहवाल तयार करा</h3>
+    <p class="modal-msg">चेकलिस्ट अहवाल PDF स्वरूपात तयार होईल.</p>
+    <div class="gap-col">
+      <button onclick="finishInspection()" id="pdfConfirmBtn" class="btn btn-ok" style="width:100%">📄 PDF तयार करा</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUCCESS SCREEN -->
+<div id="successScr">
+  <div class="success-icon">
+    <svg style="width:42px;height:42px;color:var(--gold)" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+    </svg>
+  </div>
+  <span style="background:var(--gold);color:var(--navy);font-size:10px;font-weight:900;padding:4px 12px;border-radius:6px;letter-spacing:1.5px">MSRTC SMART MECHANIZED CLEANING</span>
+  <h2 style="font-size:22px;font-weight:900;color:var(--navy)">चेकलिस्ट पूर्ण! 🎉</h2>
+  <div class="token-box">
+    <p class="token-lbl">टोकन आयडी</p>
+    <p id="tokenDisplay" class="token-val">—</p>
+  </div>
+  <p id="successMsg" style="font-size:12.5px;color:var(--txt-mid);text-align:center;max-width:300px;margin-top:6px"></p>
+  <div id="successSummary" class="card" style="width:100%;max-width:340px;font-size:12px;line-height:1.7;color:var(--txt-mid)"></div>
+  <a id="pdfLink" href="#" target="_blank" class="btn btn-primary" style="width:100%;max-width:340px;text-decoration:none;font-size:15px">📥 PDF डाउनलोड करा</a>
+  <div id="noPdfNote" class="hidden" style="background:var(--warn-bg);border:1px solid var(--warn-bd);border-radius:var(--r-sm);padding:11px 15px;text-align:center;font-size:12px;color:#6b4710;width:100%;max-width:340px">
+    ⚠️ PDF तयार होऊ शकली नाही.
+    <span id="pdfErrMsg" style="font-size:10px;font-family:monospace;display:block;margin-top:3px;word-break:break-all"></span>
+    <span style="color:var(--ok);font-weight:700;display:block;margin-top:3px">✅ डेटा जतन झाला आहे.</span>
+  </div>
+  <button onclick="newEntry()" class="btn btn-outline" style="width:100%;max-width:340px">+ नवीन चेकलिस्ट</button>
+  <p class="muted center" style="padding:8px 0">Powered by Smart Services Pvt. Ltd., Pune</p>
+</div>
+
+<!-- माघील अहवाल SCREEN -->
+<div id="magilScr" class="magil-scr" role="dialog" aria-modal="true" aria-label="माघील अहवाल">
+  <div class="magil-hdr">
+    <button class="magil-back-btn" onclick="closeMagilScr()" aria-label="मागे">← मागे</button>
+    <div class="magil-hdr-centre">
+      <span style="font-size:18px">📋</span>
+      <span class="magil-hdr-title">माघील अहवाल</span>
+    </div>
+    <button class="magil-refresh-btn" onclick="loadMagilReports()" aria-label="पुन्हा लोड" title="पुन्हा लोड">🔄</button>
+  </div>
+  <div id="magilEmpBadge" class="magil-emp-badge" style="display:none"></div>
+  <!-- DATE FILTER BAR -->
+  <div class="magil-filter-bar">
+    <label for="magilDateFilter">📅 तारीख:</label>
+    <input type="date" id="magilDateFilter" class="magil-date-inp" onchange="loadMagilReports()" />
+    <button onclick="setMagilDateToday()" class="qd-btn btn-sm" style="min-height:34px;font-size:11px">आज</button>
+    <button onclick="clearMagilDateFilter()" class="qd-btn btn-sm" style="min-height:34px;font-size:11px">सर्व</button>
+  </div>
+  <div id="magilSummary" class="magil-summary" style="display:none"></div>
+  <div id="magilList" class="magil-list">
+    <div class="magil-empty">
+      <div class="magil-empty-icon">📂</div>
+      <p class="magil-empty-title">अहवाल लोड होत आहेत…</p>
+    </div>
+  </div>
+</div>
+
+<!-- SEARCH MODAL -->
+<div id="searchModal" class="modal-ov">
+  <div class="modal-sheet" style="max-height:92dvh;display:flex;flex-direction:column;overflow:hidden">
+    <div class="modal-handle"></div>
+    <h3 class="modal-title">🔍 अहवाल शोधा</h3>
+    <div id="myBanner" class="status-box warn" style="display:none;margin-bottom:8px"></div>
+    <div class="gap-col" style="margin-bottom:10px">
+      <div>
+        <label class="lbl">टोकन क्रमांक</label>
+        <input type="text" id="srchToken" class="inp" placeholder="उदा: MSRTC-PUN-SWGT-0001"
+               autocomplete="off" autocapitalize="characters"
+               oninput="this.value=this.value.toUpperCase()"
+               style="padding:12px;font-size:14px;font-family:monospace;letter-spacing:.5px" />
+      </div>
+      <div class="gap-row">
+        <div style="flex:1">
+          <label class="lbl">बस क्रमांक</label>
+          <input type="text" id="srchBus" class="inp" placeholder="MH40BP9101"
+                 autocomplete="off" autocapitalize="characters"
+                 oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"
+                 style="padding:12px;font-size:14px;font-weight:700;letter-spacing:.5px" />
+        </div>
+        <div style="flex:1">
+          <label class="lbl">प्रकार</label>
+          <select id="srchType" class="inp" style="padding:12px;font-size:13px">
+            <option value="">सर्व प्रकार</option>
+            <option value="bs">बसस्थानक स्वच्छता दैनंदिन तपासणी</option>
+            <option value="bw">बसेस स्वच्छता दैनंदिन तपासणी</option>
+            <option value="gh">विश्रांतीगृह स्वच्छता दैनंदिन तपासणी</option>
+            <option value="wr">प्रसाधनगृह स्वच्छता दैनंदिन तपासणी</option>
+            <option value="es">बसस्थानक स्वच्छता-आठवड्यातून एकदा करावयाची स्वच्छता तपासणी</option>
+            <option value="gh_w">चालक वाहक विश्रांतीगृह स्वच्छता व सोयीसुविधा -आठवड्यातून एकदा तपासणी</option>
+            <option value="bm">बसेस स्वच्छता-महिन्यातून एकदा करावयाची स्वच्छता तपासणी</option>
+            <option value="sm">बसस्थानक स्वच्छता- महिन्यातून एकदा करावयाची स्वच्छता तपासणी</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="lbl">तारीख <span class="lbl-hint">(पर्यायी)</span></label>
+        <div class="gap-row" style="align-items:center">
+          <input type="date" id="srchDate" class="inp" style="flex:1;padding:11px;font-size:14px" />
+          <button onclick="clearSrchDate()" class="qd-btn">साफ</button>
+        </div>
+      </div>
+      <div id="rangeWrap" style="display:none"></div>
+      <button onclick="doSearch()" class="btn btn-primary" style="min-height:50px;font-size:14px">🔍 शोधा</button>
+    </div>
+    <div id="srchResults" style="flex:1;overflow-y:auto;min-height:100px">
+      <p class="muted center" style="padding:24px 0">टोकन, बस क्रमांक, तारीख किंवा प्रकार टाकून शोधा</p>
+    </div>
+    <button onclick="hideModal('searchModal')" class="btn btn-back" style="margin-top:10px;flex:none">बंद करा</button>
+  </div>
+</div>
+
+<!-- ===== MAIN SHELL ===== -->
+<div class="shell">
+
+  <!-- HEADER -->
+  <header class="hdr">
+    <div class="hdr-row">
+      <img src="https://i.postimg.cc/wTv6Pdyd/Screenshot-2026-05-28-235556-removebg-preview.png"
+           alt="Smart Services" class="hdr-logo" />
+      <div class="hdr-titles">
+        <div class="hdr-title">MSRTC Smart Mechanized Cleaning</div>
+        <div class="hdr-sub">MSRTC Facility Management Platform</div>
+      </div>
+      <div class="hdr-menu-btn" onclick="openSearchModal()">☰</div>
+    </div>
+    <div class="prog-bar-wrap">
+      <div id="progFill" class="prog-bar-fill" style="width:33%"></div>
+    </div>
+    <div class="prog-labels">
+      <span id="pl1" class="prog-lbl active">① माहिती</span>
+      <span id="pl2" class="prog-lbl">② चेकलिस्ट</span>
+      <span id="pl3" class="prog-lbl">③ पूर्ण</span>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- PAGE 1: SUPERVISOR INFO -->
+    <div id="page1" class="page active">
+      <div class="sec-head">🏠 होमएपेज</div>
+
+      <div class="field">
+        <label class="lbl">जिल्हा <span style="color:var(--err)">*</span></label>
+        <select id="dist" onchange="loadStations()" class="inp">
+          <option value="">— लोड होत आहे… —</option>
+        </select>
+        <div id="bootDiag" class="hidden" style="margin-top:8px;background:var(--err-bg);border:1px solid var(--err-bd);border-radius:var(--r-sm);padding:10px 12px;font-size:11.5px;color:var(--err);line-height:1.5">
+          <div id="bootDiagMsg" style="font-weight:700">जिल्हे लोड होत आहेत…</div>
+          <div id="bootDiagRaw" style="font-family:monospace;font-size:10px;color:#7f1d1d;margin-top:5px;word-break:break-word;white-space:pre-line;max-height:160px;overflow:auto"></div>
+          <button onclick="reloadBootData()" class="btn btn-primary" style="min-height:38px;font-size:12px;margin-top:8px;width:100%">🔄 पुन्हा लोड करा (Reload districts)</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="lbl">बस स्थानक <span style="color:var(--err)">*</span></label>
+        <select id="stn" class="inp" onchange="_peekResume()">
+          <option value="">— जिल्हा आधी निवडा —</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="lbl">कर्मचारी आयडी <span style="color:var(--err)">*</span>
+          <span class="lbl-hint">(फक्त संख्या, उदा: 1001)</span>
+        </label>
+        <div class="ac-wrap">
+          <input type="text" id="empid" class="inp" placeholder="उदा: 1001"
+                 inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="off"
+                 oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+                 onchange="lookupEmpName(this.value)" onblur="lookupEmpName(this.value)" />
+        </div>
+        <div id="empNameShow" class="lbl-hint" style="margin-top:4px;color:var(--navy);font-weight:700"></div>
+      </div>
+
+      <div class="field" id="nameField">
+        <label class="lbl">सुपरवायझर नाव <span style="color:var(--err)">*</span></label>
+        <input type="text" id="name" class="inp" placeholder="सुपरवायझरचे नाव टाका"
+               autocomplete="off" autocapitalize="words" />
+      </div>
+
+      <div id="empStatus" style="display:none"></div>
+
+      <div id="statsCard" class="card hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;font-weight:700;color:var(--navy)">📊 माझी आकडेवारी</span>
+          <button onclick="loadStats()" class="qd-btn btn-sm">🔄</button>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-cell">एकूण अहवाल<span id="stTotal" class="stat-val">—</span></div>
+          <div class="stat-cell">PDF अहवाल<span id="stPdf" class="stat-val">—</span></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="lbl">तारीख <span style="color:var(--err)">*</span></label>
+        <input type="date" id="date" class="inp" onchange="onDateChange(this)" />
+        <span id="backdateBadge" style="display:none;margin-top:5px;padding:4px 10px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:12px;font-weight:700;color:#856404">
+          📅 मागील तारखेची नोंद — नवीन स्वतंत्र नोंद तयार होईल
+        </span>
+        <span class="lbl-hint" style="display:block;margin-top:3px">मागील तारीख निवडता येते — जुन्या तारखेसाठी नवीन नोंद तयार होईल</span>
+      </div>
+
+      <div class="gap-col" style="margin-top:4px">
+        <button type="button" id="magilBtn" onclick="openMagilScr()" class="btn magil-entry-btn" style="min-height:50px">
+          📋 माघील अहवाल पहा
+        </button>
+      </div>
+
+      <p class="muted center" style="margin-top:18px">Powered by Smart Services Pvt. Ltd., Pune</p>
+    </div>
+    <!-- end page1 -->
+
+    <!-- PAGE 2: CHECKLIST -->
+    <div id="page2" class="page">
+
+      <!-- FREQUENCY SELECTOR -->
+      <div class="field" id="freqField">
+        <label class="lbl">तपासणी प्रकार <span style="color:var(--err)">*</span></label>
+        <div class="freq-pills">
+          <div class="freq-pill" id="fpDaily" onclick="setFreq('daily')">
+            <span class="fp-icon">📅</span><span>दैनंदिन</span>
+          </div>
+          <div class="freq-pill" id="fpWeekly" onclick="setFreq('weekly')">
+            <span class="fp-icon">🗓️</span><span>साप्ताहिक</span>
+          </div>
+          <div class="freq-pill" id="fpMonthly" onclick="setFreq('monthly')">
+            <span class="fp-icon">📆</span><span>मासिक</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="field" id="ctypeField">
+        <label class="lbl">चेकलिस्ट <span style="color:var(--err)">*</span></label>
+        <select id="ctype" onchange="onChecklistChange()" class="inp" style="font-weight:700;color:var(--navy)">
+          <option value="">— आधी प्रकार निवडा —</option>
+        </select>
+      </div>
+
+      <!-- VAR-SHIFTS: how many shifts does this station run today? -->
+      <div class="field hidden" id="shiftCountField">
+        <label class="lbl">आज एकूण किती पाळ्या (Shifts)? <span style="color:var(--err)">*</span></label>
+        <select id="shiftCount" class="inp" onchange="onShiftCountChange()" style="font-weight:700;color:var(--navy)">
+          <option value="">— पाळ्यांची संख्या निवडा —</option>
+          <option value="4">४ पाळ्या (4 Shifts)</option>
+          <option value="6">६ पाळ्या (6 Shifts)</option>
+        </select>
+        <span class="lbl-hint" style="display:block;margin-top:3px">पाळ्या क्रमाने भराव्या लागतील — पहिली, दुसरी, तिसरी…</span>
+      </div>
+
+      <!-- Shift / unit tracker -->
+      <div id="shiftWrap" class="hidden">
+        <label class="lbl" style="margin-bottom:4px">प्रगती</label>
+        <div id="shiftTrack" class="shift-track"></div>
+      </div>
+
+      <div id="infoBadge" class="info-badge hidden"></div>
+
+      <!-- PERSISTENT BUS CONTROL PANEL — shown once any bus is saved -->
+      <div id="busDashPanel" style="display:none;margin:8px 0 4px;border-radius:12px;border:2px solid var(--navy);background:var(--surface);overflow:hidden">
+        <!-- Header bar -->
+        <div style="background:var(--navy);color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span style="font-weight:900;font-size:15px">🚌 आज धुतलेल्या बसेस</span>
+          <span id="busDashCount" style="background:var(--gold);color:var(--navy);font-weight:900;font-size:13px;padding:2px 10px;border-radius:20px">0 बस</span>
+        </div>
+        <!-- Bus list -->
+        <div id="busDashList" style="max-height:130px;overflow-y:auto;padding:6px 10px;display:flex;flex-wrap:wrap;gap:6px"></div>
+        <!-- End session button -->
+        <div style="padding:8px 10px;border-top:1px solid var(--line-md)">
+          <button onclick="endBusInspection()" class="btn btn-ok" style="width:100%;font-size:15px;font-weight:900;padding:13px;background:var(--navy)">
+            🏁 बस धुणे समाप्त करा — PDF तयार करा
+          </button>
+        </div>
+      </div>
+
+      <!-- Bus number -->
+      <div id="busWrap" class="field hidden">
+        <label class="lbl">बस क्रमांक <span style="color:var(--err)">*</span></label>
+        <input type="text" id="busNum" class="inp"
+               placeholder="उदा: MH40BP9101"
+               autocomplete="off" autocapitalize="characters" maxlength="10"
+               oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'');document.getElementById('busNumErr').style.display='none'"
+               style="font-weight:900;font-size:20px;letter-spacing:1.5px;color:var(--navy);text-align:center" />
+        <p id="busNumErr" style="color:var(--err);font-size:11px;margin-top:5px;display:none;font-weight:600"></p>
+      </div>
+
+      <!-- Questions -->
+      <div id="qWrap" class="hidden"></div>
+      <div id="qEmpty" class="info-badge hidden center" style="color:#6b4710;background:var(--warn-bg);border-color:var(--warn-bd)">⚠️ प्रश्न आढळले नाहीत.</div>
+
+      <p class="muted center" style="margin-top:14px">Powered by Smart Services Pvt. Ltd., Pune</p>
+    </div>
+    <!-- end page2 -->
+
+  </div>
+  <!-- end content -->
+
+  <!-- FIXED ACTION BAR -->
+  <div class="action-bar">
+    <button id="backBtn"   type="button" onclick="goBack()"       class="btn btn-back"    style="flex:1;display:none">← मागे</button>
+    <button id="nextBtn"   type="button" onclick="goToPage2()"    class="btn btn-primary"  style="flex:2">पुढील →</button>
+    <button id="submitBtn" type="button" onclick="completeUnit()" class="btn btn-ok"       style="flex:2;display:none">✔ बस जतन करा</button>
+    <!-- action-bar "🏁 पूर्ण" (endBusBtn) removed per request. Finalize stays
+         reachable from the bus dashboard panel ("🏁 बस धुणे समाप्त करा — PDF तयार
+         करा") and the bus modal. All JS refs to endBusBtn are null-guarded, so
+         they safely become no-ops now that the element is gone. -->
+  </div>
+
+</div>
+<!-- end shell -->
+
+<script src="js/app.js"></script>
+</body>
+</html>

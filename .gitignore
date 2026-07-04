@@ -1,0 +1,6 @@
+# database lives outside git — back it up via /backup or by copying data/app.db
+data/app.db
+data/app.db-shm
+data/app.db-wal
+node_modules/
+.claude/

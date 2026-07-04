@@ -1,0 +1,25 @@
+# Render Blueprint — deploy with "New + → Blueprint" after pushing to GitHub.
+#
+# IMPORTANT — database durability:
+#   The `disk` section below gives the SQLite database a persistent volume so
+#   inspection data SURVIVES deploys and restarts. Persistent disks require the
+#   Starter plan (paid). On the FREE plan, delete the `disk:` block and the
+#   DATA_DIR env var — the app will run, but ALL DATA IS WIPED whenever the
+#   service restarts or redeploys (fine for testing, not for real records).
+services:
+  - type: web
+    name: msrtc-checklist
+    runtime: node
+    plan: starter          # change to `free` for testing (see warning above)
+    buildCommand: ""       # zero dependencies — nothing to build
+    startCommand: node server/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: DATA_DIR
+        value: /data       # store the SQLite file on the persistent disk
+      - key: ADMIN_KEY
+        generateValue: true  # enables GET /backup?key=... (see Render dashboard for the value)
+    disk:
+      name: msrtc-data
+      mountPath: /data
+      sizeGB: 1
