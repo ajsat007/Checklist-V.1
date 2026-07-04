@@ -4,3 +4,5 @@ data/app.db-shm
 data/app.db-wal
 node_modules/
 .claude/
+# temp exports from the old Google Sheet (huge)
+_*.csv

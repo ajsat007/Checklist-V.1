@@ -68,6 +68,19 @@ node server/smoke-test.js
 44 end-to-end checks: login, shift + bus flows, repeat buses, edit, resume,
 ownership rules, search, reports, report HTML, path-traversal guard.
 
+## Migrating history from the old Google Sheet
+
+Already done once (2026-07-04: 24,295 sessions imported). To re-run for newer
+rows — it never duplicates or overwrites existing sessions:
+
+```bash
+curl -sL "https://docs.google.com/spreadsheets/d/<SHEET_ID>/gviz/tq?tqx=out:csv&sheet=Inspection_Sessions" -o sessions.csv
+node server/migrate-sessions.js sessions.csv
+```
+
+Old Google Drive PDF links are preserved on migrated sessions; sessions without
+one use the new `/report/:id` page.
+
 ## Backup
 
 The entire database is the single file `data/app.db` — copy it anywhere to back

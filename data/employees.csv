@@ -1,8 +1,11 @@
 employee_id,name,password,active
+39373,Rohit Sunil Gaikwad,,1
+43699,Yogita Sharad Haldankar,,1
 43877,SACHIN SHIVLAL ADE,,1
 43995,DINESH SHAMRAO KUTHE,,1
 43996,NIKHIL UMRAO WAGHDHARE,,1
 45481,NIMIRAJ GURUDAS GOVARDHAN,,1
+52864,GAYATRI NANDKUMAR MUDLIYAR,,1
 54195,RAKESH RAMKRUSHNA KOVE,,1
 56253,Ganesh vijay gote,,1
 56284,Rushikesh Ramesh Shinde,,1
@@ -94,6 +97,7 @@ employee_id,name,password,active
 69272,Ashish Tryambakrao Shendre,,1
 69280,Ravi Parameshwar Kulat,,1
 69283,Kalpesh Mohaniraj Shirode,,1
+69286,Ajitsingh Shankarsingh Kochar,,1
 69287,Bhushan Pradip Joshi,,1
 69292,Pritam Anil Kolhatkar,,1
 69293,Rohit Annarao Patil,,1
@@ -109,6 +113,7 @@ employee_id,name,password,active
 69368,Praful Marotrao Kokane,,1
 69370,Durgasing Kasalsing Rathod,,1
 69373,Rohit Sunil Gaikwad,,1
+69375,Raj Gokul Shinde,,1
 69379,Aghav Gopinath Uddhavrao,,1
 69380,Sanjay Sattyawan Kolekar,,1
 69381,Tushar Hemant Bhadane,,1
@@ -282,21 +287,14 @@ employee_id,name,password,active
 71994,Pukar Babanrao Aute,,1
 71995,Prashant Balkrishna Parit,,1
 71996,Ajitsingh Shankarsingh Kochar,,1
+71997,SANTOSH RAMCHANDRA MURHADE,,1
 72005,Vivek Kishor Tandel,,1
 72029,Sandip Dilip Narwade,,1
 72035,Sandesh Dilip Panchal,,1
 72041,Mitesh Singh Govind Singh Zala,,1
 72068,Shubham Sanjay Sarode,,1
 72147,Ganesh Chanabas Swami,,1
-440018,Tarachand Karade,,1
-441110,Manoj Raut,,1
-441501,Suhas Charpe,,1
-441202,Injumam Ali,,1
-441304,Jagdish Jichakar,,1
-441106,Sachin Shirode,,1
-441614,Sanketkumar Chandrikapure,,1
-441911,Vijay Thaukar,,1
-71997,SANTOSH RAMCHANDRA MURHADE,,1
+72382,Anand Gangadhar Puri,,1
 72419,Prathamesh Eknath Ansurkar,,1
 72434,Nilesh Narayan Ahire,,1
 72459,Lokesh Nathuji Gedam,,1
@@ -321,6 +319,16 @@ employee_id,name,password,active
 72813,Ganesh Arun Barge,,1
 72825,Deep Chandrakant Vayadekar,,1
 72965,Prasad Pandurang Bhise,,1
+73043,Shobharj  Laxman Awaghade,,1
 73055,Adarsh Deepak More,,1
 73057,Parag Vinod Karambe,,1
-72382,Anand Gangadhar Puri,,1
+73343,Shobhraj Laxman Awaghade,,1
+440018,Tarachand Karade,,1
+441106,Sachin Shirode,,1
+441110,Manoj Raut,,1
+441202,Injumam Ali,,1
+441304,Jagdish Jichakar,,1
+441501,Suhas Charpe,,1
+441614,Sanketkumar Chandrikapure,,1
+441911,Vijay Thaukar,,1
+442905,Lokesh Gedam,,1
