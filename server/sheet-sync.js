@@ -90,20 +90,20 @@ function mirrorDelete(sessionId) {
   });
 }
 
-/* Find a session's current sheet row by re-reading the ID column. Used when the
-   row number is unknown (fresh append) or stale. Rebuilds the whole map cheaply
-   in one read, so repeated lookups after a batch of appends cost only one call. */
+/* Find a session's current sheet row by re-reading ONLY the ID column (a few
+   hundred KB even at 24k rows). Rebuilds the whole map in one cheap call. */
 async function _resolveRow(sessionId) {
-  const { rows } = await sheets.readAllSessions();
+  const ids = await sheets.readIdColumn();
   rowMap.clear();
-  rows.forEach((r, i) => { const id = String(r[0] || '').trim(); if (id) rowMap.set(id, i + 2); });
+  ids.forEach((id, i) => { if (id) rowMap.set(id, i + 2); });
   return rowMap.get(sessionId) || 0;
 }
 
-/* Boot: pull every row from the Sheet into SQLite and build the row map. */
+/* Boot: pull every row from the Sheet into SQLite and build the row map.
+   Chunked (1500 rows/call) so peak memory stays ~25 MB — Render's free
+   instance has only 512 MB and one giant read would OOM it. */
 async function loadFromSheet(db) {
   if (!sheets.sheetsEnabled()) return { loaded: 0, enabled: false };
-  const { rows } = await sheets.readAllSessions();
   const ins = db.prepare(`INSERT OR REPLACE INTO sessions
     (session_id, token_id, district, station, supervisor_name, employee_id,
      checklist_type, checklist_key, created_time, created_date, date_iso,
@@ -115,16 +115,18 @@ async function loadFromSheet(db) {
      @pdf_url,@shifts_json,@buses_json)`);
   let loaded = 0;
   rowMap.clear();
-  const tx = db.transaction(() => {
-    rows.forEach((r, i) => {
-      const s = sessionFromRow(r);
-      if (!s) return;
-      ins.run(s);
-      rowMap.set(s.session_id, i + 2);   // +2: header is row 1, data starts at row 2
-      loaded++;
+  await sheets.readSessionsChunked((rows, startRow) => {
+    const tx = db.transaction(() => {
+      rows.forEach((r, i) => {
+        const s = sessionFromRow(r);
+        if (!s) return;
+        ins.run(s);
+        rowMap.set(s.session_id, startRow + i);
+        loaded++;
+      });
     });
+    tx();
   });
-  tx();
   return { loaded, enabled: true };
 }
 

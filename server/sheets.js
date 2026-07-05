@@ -88,13 +88,31 @@ async function _api(method, path, body) {
 
 /* ---------- operations used by the app ---------- */
 
-// Bulk-read every data row. Returns array of arrays (excluding the header).
-async function readAllSessions() {
-  const range = encodeURIComponent(TAB + '!A1:T100000');
+// Read data rows in CHUNKS. One giant read of 24k sessions is ~350 MB of JSON —
+// more RAM than Render's free instance has. 1500-row chunks keep peak memory
+// ~25 MB. onChunk(rows, startRowNumber) is called per chunk; return total rows.
+async function readSessionsChunked(onChunk, chunkSize) {
+  chunkSize = chunkSize || 1500;
+  let start = 2;                       // row 1 = header
+  let total = 0;
+  for (;;) {
+    const range = encodeURIComponent(TAB + '!A' + start + ':T' + (start + chunkSize - 1));
+    const data = await _api('GET', '/values/' + range);
+    const rows = data.values || [];
+    if (!rows.length) break;
+    await onChunk(rows, start);
+    total += rows.length;
+    if (rows.length < chunkSize) break;   // last (partial) chunk
+    start += chunkSize;
+  }
+  return total;
+}
+
+// Read ONLY the Session ID column (tiny payload) — for rebuilding the row map.
+async function readIdColumn() {
+  const range = encodeURIComponent(TAB + '!A2:A200000');
   const data = await _api('GET', '/values/' + range);
-  const rows = data.values || [];
-  if (!rows.length) return { header: COLS.slice(), rows: [] };
-  return { header: rows[0], rows: rows.slice(1) };
+  return (data.values || []).map(r => String(r[0] || '').trim());
 }
 
 // Append one row (INSERT). rowArr must be COLS-ordered.
@@ -125,5 +143,5 @@ async function clearSessionRow(rowNumber) {
 
 module.exports = {
   sheetsEnabled, COLS, TAB,
-  readAllSessions, appendSession, updateSessionRow, clearSessionRow
+  readSessionsChunked, readIdColumn, appendSession, updateSessionRow, clearSessionRow
 };
