@@ -22,6 +22,17 @@ services:
     envVars:
       - key: ADMIN_KEY
         generateValue: true  # enables GET /backup?key=... (value shown in dashboard)
+      # --- GOOGLE SHEET AS DURABLE DATABASE (set these 3 in the dashboard) ---
+      # With all three set, the server restores ALL sessions from the Sheet's
+      # Inspection_Sessions tab at boot and mirrors every write back to it —
+      # old data visible + new data survives free-plan restarts.
+      # See README "Google Sheet as the live database" for the setup steps.
+      - key: SHEET_ID
+        sync: false          # value entered in dashboard: the spreadsheet id
+      - key: GOOGLE_SA_EMAIL
+        sync: false          # service-account client_email
+      - key: GOOGLE_SA_PRIVATE_KEY
+        sync: false          # service-account private_key (paste as-is)
       # - key: DATA_DIR      # ← uncomment when upgrading to starter + disk
       #   value: /data
     # disk:                  # ← uncomment when upgrading to starter

@@ -19,12 +19,12 @@ async function call(fn, ...args) {
   console.log('— login / lookup —');
   const bad = await call('loginSupervisor', '9999', '9999');
   ok('unknown id rejected', bad.ok === false && bad.code === 'NOT_FOUND');
-  const login = await call('loginSupervisor', '1001', '1001');
-  ok('login 1001', login.ok === true && login.employee.name.length > 0, JSON.stringify(login));
-  const wrongPw = await call('loginSupervisor', '1001', 'nope');
+  const login = await call('loginSupervisor', '43877', '43877');
+  ok('login 43877', login.ok === true && login.employee.name.length > 0, JSON.stringify(login));
+  const wrongPw = await call('loginSupervisor', '43877', 'nope');
   ok('wrong password rejected', wrongPw.ok === false && wrongPw.code === 'BAD_PW');
-  const look = await call('lookupSupervisorName', '1002');
-  ok('lookup 1002', look.ok === true && !!look.name);
+  const look = await call('lookupSupervisorName', '43995');
+  ok('lookup 43995', look.ok === true && !!look.name);
 
   console.log('— shift checklist (bs) —');
   const SID = 'SES-TEST-SHIFT-' + Date.now();
@@ -34,42 +34,42 @@ async function call(fn, ...args) {
   ];
   const sub = await call('submitAllShifts', {
     sessionId: SID, tokenId: '', dist: 'अमरावती', stn: 'अमरावती',
-    name: 'राजेश पाटील', id: '1001', date: '2026-07-03', checklistKey: 'bs', shifts
+    name: 'SACHIN SHIVLAL ADE', id: '43877', date: '2026-07-03', checklistKey: 'bs', shifts
   });
   ok('submitAllShifts ok', sub.ok === true, JSON.stringify(sub));
   ok('token format', /^MSRTC-[A-Z0-9]+-[A-Z0-9]+-\d{4}$/.test(sub.tokenId || ''), sub.tokenId);
   ok('pdfUrl returned', typeof sub.pdfUrl === 'string' && sub.pdfUrl.indexOf('/report/') === 0);
 
-  const dup = await call('checkChecklistCompletedToday', '1001', 'अमरावती', 'bs', '2026-07-03');
+  const dup = await call('checkChecklistCompletedToday', '43877', 'अमरावती', 'bs', '2026-07-03');
   ok('completed-today gate fires', dup.completed === true);
-  const dupSubmit = await call('createSession', { dist: 'अमरावती', stn: 'अमरावती', name: 'राजेश पाटील', id: '1001', checklistKey: 'bs', date: '2026-07-03' });
+  const dupSubmit = await call('createSession', { dist: 'अमरावती', stn: 'अमरावती', name: 'SACHIN SHIVLAL ADE', id: '43877', checklistKey: 'bs', date: '2026-07-03' });
   ok('duplicate createSession blocked', dupSubmit.ok === false && dupSubmit.completedToday === true);
-  const badKey = await call('createSession', { dist: 'अ', stn: 'ब', name: 'x', id: '1001', checklistKey: 'zz', date: '2026-07-03' });
+  const badKey = await call('createSession', { dist: 'अ', stn: 'ब', name: 'x', id: '43877', checklistKey: 'zz', date: '2026-07-03' });
   ok('invalid checklist key rejected', badKey.ok === false);
 
   console.log('— reports / detail —');
-  const rep = await call('getMyReports', '1001');
+  const rep = await call('getMyReports', '43877');
   ok('getMyReports has session', rep.ok === true && rep.results.some(x => x.sessionId === SID));
   const row = rep.results.find(x => x.sessionId === SID);
   ok('progressLabel', !!row && /पाळी/.test(row.progressLabel), row && row.progressLabel);
   ok('status Completed', !!row && row.status === 'Completed');
-  const det = await call('getSessionDetail', SID, '1001');
+  const det = await call('getSessionDetail', SID, '43877');
   ok('detail units=2', det.ok === true && det.units.length === 2, JSON.stringify(det).slice(0, 120));
   ok('detail remark present', det.units[0].items.some(i => i.remark === 'दुरुस्ती हवी'));
 
   console.log('— edit —');
-  const edit = await call('updateUnitAnswers', { sessionId: SID, unitName: 'पहिली पाळी(Shift)', mode: 'shift', id: '1001', answers: { 'फलाट स्वच्छता': 'नाही', 'जिना': 'होय' }, remarks: { 'फलाट स्वच्छता': 'पुन्हा करा' } });
+  const edit = await call('updateUnitAnswers', { sessionId: SID, unitName: 'पहिली पाळी(Shift)', mode: 'shift', id: '43877', answers: { 'फलाट स्वच्छता': 'नाही', 'जिना': 'होय' }, remarks: { 'फलाट स्वच्छता': 'पुन्हा करा' } });
   ok('updateUnitAnswers ok', edit.ok === true);
-  const det2 = await call('getSessionDetail', SID, '1001');
+  const det2 = await call('getSessionDetail', SID, '43877');
   const u1 = det2.units.find(u => u.label === 'पहिली पाळी(Shift)');
   ok('edit persisted', !!u1 && u1.items.some(i => i.q === 'फलाट स्वच्छता' && i.answer === 'नाही'));
-  const foreignEdit = await call('updateUnitAnswers', { sessionId: SID, unitName: 'पहिली पाळी(Shift)', mode: 'shift', id: '1002', answers: {} });
+  const foreignEdit = await call('updateUnitAnswers', { sessionId: SID, unitName: 'पहिली पाळी(Shift)', mode: 'shift', id: '43995', answers: {} });
   ok('foreign edit rejected', foreignEdit.ok === false);
 
   console.log('— bus checklist (bw) —');
   const BID = 'SES-TEST-BUS-' + Date.now();
   const busPayload = (n, rep2) => ({
-    sessionId: BID, tokenId: '', dist: 'पुणे', stn: 'स्वारगेट', name: 'सुनिल देशमुख', id: '1002',
+    sessionId: BID, tokenId: '', dist: 'पुणे', stn: 'स्वारगेट', name: 'DINESH SHAMRAO KUTHE', id: '43995',
     date: '2026-07-03', checklistKey: 'bw', busNumber: n, isRepeat: !!rep2,
     answers: { 'आसनांची स्वच्छता': 'होय' }, remarks: {}
   });
@@ -81,25 +81,25 @@ async function call(fn, ...args) {
   ok('repeat bus appended', b1r.ok === true && b1r.totalBuses === 3);
   const b1u = await call('saveBusEntry', busPayload('MH14XY9999', false));
   ok('same bus replaced (not appended)', b1u.ok === true && b1u.totalBuses === 3);
-  const fin = await call('finalizeBusSession', { sessionId: BID, id: '1002' });
+  const fin = await call('finalizeBusSession', { sessionId: BID, id: '43995' });
   ok('finalize bus session', fin.ok === true && fin.pdfUrl.indexOf('/report/') === 0);
 
   console.log('— resume / incomplete —');
   const RID = 'SES-TEST-RES-' + Date.now();
   await call('saveBusEntry', Object.assign(busPayload('MH20ZZ0001'), { sessionId: RID }));
-  const inc = await call('listIncompleteSessions', '1002');
+  const inc = await call('listIncompleteSessions', '43995');
   ok('incomplete listed', inc.ok === true && inc.sessions.some(s => s.sessionId === RID));
-  const resume = await call('resumeSession', RID, '1002');
+  const resume = await call('resumeSession', RID, '43995');
   ok('resumeSession', resume.ok === true && resume.completedBuses.length === 1 && resume.mode === 'bus', JSON.stringify(resume).slice(0, 150));
-  const foreignResume = await call('resumeSession', RID, '1001');
+  const foreignResume = await call('resumeSession', RID, '43877');
   ok('foreign resume rejected', foreignResume.ok === false);
 
   console.log('— search —');
-  const s1 = await call('searchReports', sub.tokenId, '', '', '', '1001');
+  const s1 = await call('searchReports', sub.tokenId, '', '', '', '43877');
   ok('search by token', s1.ok === true && s1.results.length === 1 && s1.results[0].sessionId === SID);
-  const s2 = await call('searchReports', '', 'MH12AB', '', '', '1002');
+  const s2 = await call('searchReports', '', 'MH12AB', '', '', '43995');
   ok('search by bus number', s2.ok === true && s2.results.some(x => x.sessionId === BID));
-  const s3 = await call('searchReports', '', '', 'bw', '2026-07-03', '1002');
+  const s3 = await call('searchReports', '', '', 'bw', '2026-07-03', '43995');
   ok('search by type+date', s3.ok === true && s3.results.every(x => x.checklistKey === 'bw'));
 
   console.log('— report HTML —');
@@ -115,17 +115,17 @@ async function call(fn, ...args) {
   console.log('— pdf poll endpoints —');
   const gp = await call('getSessionPdf', SID);
   ok('getSessionPdf', gp.ok === true && gp.pdfUrl.indexOf('/report/') === 0);
-  const gn = await call('generatePdfNow', SID, '1001');
+  const gn = await call('generatePdfNow', SID, '43877');
   ok('generatePdfNow', gn.ok === true);
 
   console.log('— stats / delete —');
-  const st = await call('getEmployeeStats', '1001');
+  const st = await call('getEmployeeStats', '43877');
   ok('stats total>=1', st.ok === true && st.total >= 1);
-  const delForeign = await call('deleteSession', SID, '1002');
+  const delForeign = await call('deleteSession', SID, '43995');
   ok('foreign delete rejected', delForeign.ok === false);
-  const del = await call('deleteSession', SID, '1001');
+  const del = await call('deleteSession', SID, '43877');
   ok('own delete ok', del.ok === true);
-  const gone = await call('getSessionDetail', SID, '1001');
+  const gone = await call('getSessionDetail', SID, '43877');
   ok('deleted session gone', gone.ok === false);
 
   console.log('— static frontend —');

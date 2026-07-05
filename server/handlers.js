@@ -8,6 +8,10 @@
 const db  = require('./db');
 const cfg = require('./checklist-config');
 const { CHECKLIST_META, CHECKLIST_TITLES, FALLBACK_QUESTIONS, STATUS } = cfg;
+// Write-through to the Google Sheet (durable store). All three are no-ops when
+// the SHEET_ID / GOOGLE_SA_* env vars are absent, and they run on a background
+// queue — the HTTP response never waits for the Sheets API.
+const { mirrorInsert, mirrorUpdate, mirrorDelete } = require('./sheet-sync');
 
 /* ---------- small utilities ---------- */
 
@@ -136,7 +140,9 @@ function _ensureSessionRow(payload, defaultStatus, defaultTotalShifts) {
     total_shifts: defaultTotalShifts || 0
   });
   _log('SESSION_CREATE', sessionId, { key: key, stn: payload.stn });
-  return _getSession(sessionId);
+  const created = _getSession(sessionId);
+  mirrorInsert(created);   // durable copy in the Google Sheet (async, non-blocking)
+  return created;
 }
 
 function _unitsForKey(key) {
@@ -257,6 +263,7 @@ H.submitAllShifts = function (payload) {
   db.prepare('UPDATE sessions SET completed_shifts=?, total_shifts=?, status=?, pdf_url=?, last_updated=? WHERE session_id=?')
     .run(merged.length, totalShifts, STATUS.COMPLETED, _pdfUrl(row.session_id), _istParts().full, row.session_id);
   _log('FINALIZE', row.session_id, { shifts: merged.length });
+  mirrorUpdate(_getSession(row.session_id));   // push final state to the Sheet
   return { ok: true, tokenId: row.token_id, pdfUrl: _pdfUrl(row.session_id) };
 };
 H.submitFullChecklist = H.submitAllShifts;
@@ -286,6 +293,7 @@ H.saveBusEntry = function (payload) {
   const row = _ensureSessionRow(payload, STATUS.IN_PROCESS, 0);
   const buses = _saveBus(row.session_id, _s(payload.busNumber), payload.answers, payload.remarks, !!payload.isRepeat);
   _log('BUS_SAVE', row.session_id, { bus: payload.busNumber, total: buses.length });
+  mirrorUpdate(_getSession(row.session_id));   // push latest buses to the Sheet
   return { ok: true, sessionId: row.session_id, tokenId: row.token_id, totalBuses: buses.length };
 };
 H.saveBus = H.saveBusEntry;
@@ -298,6 +306,7 @@ H.finalizeBusSession = function (payload) {
   db.prepare('UPDATE sessions SET status=?, total_buses=?, pdf_url=?, last_updated=? WHERE session_id=?')
     .run(STATUS.COMPLETED, buses.length, _pdfUrl(row.session_id), _istParts().full, row.session_id);
   _log('FINALIZE', row.session_id, { buses: buses.length });
+  mirrorUpdate(_getSession(row.session_id));   // push Completed status to the Sheet
   return { ok: true, pdfUrl: _pdfUrl(row.session_id) };
 };
 H.finalizeInspection = H.finalizeBusSession;
@@ -320,6 +329,7 @@ H.updateUnitAnswers = function (payload) {
     }
   }
   db.prepare('UPDATE sessions SET pdf_url=?, last_updated=? WHERE session_id=?').run(_pdfUrl(row.session_id), _istParts().full, row.session_id);
+  mirrorUpdate(_getSession(row.session_id));   // push edited answers to the Sheet
   return { ok: true, pdfUrl: _pdfUrl(row.session_id) };
 };
 
@@ -339,6 +349,7 @@ H.deleteSession = function (sessionId, requestingEmpId) {
     return { ok: false, msg: 'हे सत्र तुमचे नाही.' };
   db.prepare('DELETE FROM sessions WHERE session_id=?').run(String(sessionId));
   _log('DELETE', sessionId, {});
+  mirrorDelete(String(sessionId));   // clear the row in the Sheet too
   return { ok: true, msg: '🗑 अहवाल हटवला.' };
 };
 
@@ -369,6 +380,7 @@ H.resumeSession = function (sessionId, requestingEmpId) {
     // allow reopening to add more, mirror original by flipping to In Process
   }
   db.prepare('UPDATE sessions SET status=? WHERE session_id=?').run(STATUS.IN_PROCESS, row.session_id);
+  mirrorUpdate(_getSession(row.session_id));   // keep Sheet status in step
   const id = _sessionIdentity(row);
   const totalUnits = row.total_shifts || _unitsForKey(row.checklist_key).length;
   return Object.assign({ ok: true }, id, {

@@ -14,6 +14,9 @@ const fs   = require('fs');
 const seed = require('./seed');
 const { H } = require('./handlers');
 const { buildReport } = require('./report');
+const db = require('./db');
+const { loadFromSheet } = require('./sheet-sync');
+const { sheetsEnabled } = require('./sheets');
 
 // Seed sample master data on first boot (idempotent).
 seed();
@@ -88,7 +91,7 @@ const server = http.createServer(async (req, res) => {
       if (!ALLOWED.has(fn) || typeof H[fn] !== 'function') {
         return send(res, 200, JSON.stringify({ ok: false, msg: 'Function not allowed: ' + fn }));
       }
-      const result = H[fn].apply(null, args);
+      const result = await H[fn].apply(null, args);   // handlers may be async (Sheet mirror)
       return send(res, 200, typeof result === 'string' ? result : JSON.stringify(result));
     } catch (err) {
       console.error('[exec]', err);
@@ -140,6 +143,23 @@ const server = http.createServer(async (req, res) => {
   send(res, 405, 'Method not allowed', 'text/plain');
 });
 
-server.listen(PORT, () => {
-  console.log('MSRTC Checklist server running → http://localhost:' + PORT);
-});
+/* Boot: when Google Sheet env vars are set, restore ALL sessions from the
+   Sheet into SQLite BEFORE serving traffic (this is what makes history
+   survive Render free-plan restarts). Without env vars, start as before. */
+(async () => {
+  if (sheetsEnabled()) {
+    try {
+      const t0 = Date.now();
+      const r = await loadFromSheet(db);
+      console.log('[boot] restored %d sessions from Google Sheet in %ds',
+        r.loaded, Math.round((Date.now() - t0) / 1000));
+    } catch (e) {
+      console.error('[boot] Sheet restore FAILED (continuing with local data):', e.message);
+    }
+  } else {
+    console.log('[boot] Sheet sync disabled (SHEET_ID / GOOGLE_SA_* env vars not set)');
+  }
+  server.listen(PORT, () => {
+    console.log('MSRTC Checklist server running → http://localhost:' + PORT);
+  });
+})();

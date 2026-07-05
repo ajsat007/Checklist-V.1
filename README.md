@@ -68,6 +68,44 @@ node server/smoke-test.js
 44 end-to-end checks: login, shift + bus flows, repeat buses, edit, resume,
 ownership rules, search, reports, report HTML, path-traversal guard.
 
+## Google Sheet as the live database (recommended on the free plan)
+
+With three environment variables set, the Google Sheet's **Inspection_Sessions**
+tab becomes the durable database:
+
+- **At boot** the server loads ALL sessions from the Sheet into its fast local
+  cache — so the complete history (24k+ records) is visible on the site even
+  after Render wipes the free-plan filesystem.
+- **Every write** (new checklist, bus entry, edit, finalize, delete) is mirrored
+  back to the Sheet in the background — new inspections survive restarts.
+
+**One-time Google setup (≈10 minutes, needs your Google account):**
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) → sign in
+   → top bar **Select a project → New Project** → name `msrtc-checklist` → Create.
+2. Menu ☰ → **APIs & Services → Library** → search **Google Sheets API** → **Enable**.
+3. Menu ☰ → **APIs & Services → Credentials** → **+ Create Credentials →
+   Service account** → name `msrtc-sheets` → Create → (skip roles) → Done.
+4. Click the new service account → **Keys** tab → **Add key → Create new key →
+   JSON** → a `.json` file downloads. Open it in Notepad.
+5. **Share the Sheet:** open the spreadsheet → **Share** → paste the
+   `client_email` from the JSON (looks like `msrtc-sheets@…iam.gserviceaccount.com`)
+   → role **Editor** → Send.
+6. **Render** → your service → **Environment** → add:
+   | Key | Value |
+   |-----|-------|
+   | `SHEET_ID` | `1yf4HaXD618anMLffv4OG4py_CxaxGzABi45taw-TS-o` |
+   | `GOOGLE_SA_EMAIL` | the `client_email` from the JSON |
+   | `GOOGLE_SA_PRIVATE_KEY` | the `private_key` from the JSON — paste the whole value including `-----BEGIN PRIVATE KEY-----…-----END PRIVATE KEY-----\n` |
+7. Save → Render restarts → the deploy log should show
+   `[boot] restored 24xxx sessions from Google Sheet`.
+
+Without these variables the app runs exactly as before (local SQLite only).
+
+**Limits to know:** Google allows ~60 writes/minute — very heavy simultaneous
+submissions may queue briefly (the phone app's outbox auto-retries, nothing is
+lost). Writes are mirrored in the background, so the app itself stays fast.
+
 ## Migrating history from the old Google Sheet
 
 Already done once (2026-07-04: 24,295 sessions imported). To re-run for newer
