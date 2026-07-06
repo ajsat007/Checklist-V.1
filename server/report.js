@@ -112,7 +112,7 @@ function unitTable(row, units) {
       const a = (u.answers || {})[q] || '';
       cells += '<td class="' + ansCls(a) + '">' + esc(a) + '</td>';
       const rm = (u.remarks || {})[q];
-      if (rm) remarks.push(esc(rm));
+      if (rm && remarks.indexOf(esc(rm)) === -1) remarks.push(esc(rm));
     });
     body += '<tr><td class="cc">' + mn(i + 1) + '</td><td class="qtext">' + esc(q) + '</td>' + cells +
             '<td class="rmk">' + (remarks.length ? remarks.join('<br>') : '') + '</td></tr>';
@@ -158,7 +158,8 @@ function busTable(row) {
       const a = (b.answers || {})[q] || '';
       cells += '<td class="' + ansCls(a) + '"' + dense + '>' + esc(a) + '</td>';
       const rm = (b.remarks || {})[q];
-      if (rm) remarks.push(mn(i + 1) + ': ' + esc(rm));
+      const rmTxt = rm ? (mn(i + 1) + ': ' + esc(rm)) : '';
+      if (rmTxt && remarks.indexOf(rmTxt) === -1) remarks.push(rmTxt);
     });
     body += '<tr><td class="cc">' + mn(idx + 1) + '</td><td class="cc" style="font-weight:700">' + label + '</td>' +
             cells + '<td class="rmk">' + remarks.join('<br>') + '</td></tr>';
