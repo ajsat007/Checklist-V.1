@@ -59,7 +59,7 @@ function headerBlock(row) {
     '<div class="sub">' + esc(APP.APP_NAME) + '</div>' +
     '<table class="info"><tr>' +
       '<td>विभाग- ' + esc(row.district || '') + '</td>' +
-      '<td style="text-align:right"></td>' +
+      '<td style="text-align:right">आगार- ________</td>' +
     '</tr><tr>' +
       '<td>बसस्थानक- ' + esc(row.station || '') + '</td>' +
       '<td style="text-align:right">दिनांक- ' + esc(dateDisp) + '</td>' +
