@@ -187,20 +187,37 @@ function buildReport(sessionId, autoPrint) {
     '<title>' + esc(row.token_id || 'Report') + '</title>' +
     '<link rel="preconnect" href="https://fonts.googleapis.com">' +
     '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700;800&display=swap" rel="stylesheet">' +
-    '<style>' + CSS + '</style></head><body>' +
+    '<style>' + CSS + '</style>' +
+    '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"><\/script>' +
+    '</head><body>' +
     '<div class="toolbar">' +
-    '<button class="dl-btn" onclick="window.print()">📥 PDF डाउनलोड करा / Download PDF</button>' +
+    '<button class="dl-btn" onclick="downloadPDF()">📥 PDF डाउनलोड करा / Download PDF</button>' +
     '<button onclick="window.print()">🖨️ प्रिंट करा / Print</button>' +
-    '<p class="dl-hint">डाउनलोड: "Save as PDF" निवडा / Choose "Save as PDF" as destination</p>' +
     '</div>' +
-    '<div class="sheet">' +
+    '<div class="sheet" id="reportSheet">' +
       headerBlock(row) +
       buildBody(row) +
       penaltyBlock(row.checklist_key) +
       sigBlock(row.checklist_key, row) +
       footerBlock(row) +
     '</div>' +
-    (autoPrint ? '<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},400);});</script>' : '') +
+    '<script>' +
+    'function downloadPDF(){' +
+      'var btn=document.querySelector(".dl-btn");' +
+      'btn.disabled=true;btn.textContent="⏳ तयार होत आहे...";' +
+      'var el=document.getElementById("reportSheet");' +
+      'html2pdf().set({' +
+        'margin:8,' +
+        'filename:"' + esc(row.token_id || 'Report') + '.pdf",' +
+        'image:{type:"jpeg",quality:0.95},' +
+        'html2canvas:{scale:2,useCORS:true},' +
+        'jsPDF:{unit:"mm",format:"a4",orientation:"portrait"}' +
+      '}).from(el).save().then(function(){' +
+        'btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा / Download PDF";' +
+      '});' +
+    '}' +
+    '<\/script>' +
+    (autoPrint ? '<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},400);});<\/script>' : '') +
     '</body></html>';
   return html;
 }
