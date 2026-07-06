@@ -44,8 +44,11 @@ table.grid th { background:#f0f2f5; text-align:center; font-weight:700; }
 .sigwrap { margin-top:14px; width:100%; border-collapse:collapse; page-break-inside:avoid; }
 .sigwrap td { border:1px solid #333; padding:10px 8px; font-size:11px; vertical-align:top; width:50%; height:70px; }
 .ftr { margin-top:10px; text-align:center; font-size:9px; color:#666; }
-.toolbar { text-align:center; margin:10px auto; max-width:1000px; }
-.toolbar button { background:#0b3d6e; color:#fff; border:0; padding:10px 22px; border-radius:8px; font-size:14px; cursor:pointer; }
+.toolbar { text-align:center; margin:10px auto; max-width:1000px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+.toolbar button { background:#0b3d6e; color:#fff; border:0; padding:12px 24px; border-radius:8px; font-size:15px; cursor:pointer; font-weight:600; }
+.toolbar button:active { transform:scale(0.97); }
+.toolbar .dl-btn { background:#0E9F6E; }
+.toolbar .dl-hint { width:100%; font-size:11px; color:#666; margin-top:2px; }
 @media print { .toolbar { display:none; } body { padding:0; } }
 `;
 
@@ -185,7 +188,11 @@ function buildReport(sessionId, autoPrint) {
     '<link rel="preconnect" href="https://fonts.googleapis.com">' +
     '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700;800&display=swap" rel="stylesheet">' +
     '<style>' + CSS + '</style></head><body>' +
-    '<div class="toolbar"><button onclick="window.print()">📄 PDF म्हणून जतन करा / Print</button></div>' +
+    '<div class="toolbar">' +
+    '<button class="dl-btn" onclick="window.print()">📥 PDF डाउनलोड करा / Download PDF</button>' +
+    '<button onclick="window.print()">🖨️ प्रिंट करा / Print</button>' +
+    '<p class="dl-hint">डाउनलोड: "Save as PDF" निवडा / Choose "Save as PDF" as destination</p>' +
+    '</div>' +
     '<div class="sheet">' +
       headerBlock(row) +
       buildBody(row) +
