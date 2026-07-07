@@ -526,7 +526,7 @@ H.getReportFullDetail = function (sessionId, requestingEmpId) {
   } else {
     units = _parseJSON(row.shifts_json, []).map(s => ({ label: s.shiftName, items: toItems(s.answers, s.remarks) }));
   }
-  return { ok: true, units: units };
+  return { ok: true, units: units, sessionId: row.session_id, mode: m.mode || 'shift' };
 };
 H.getSessionDetail = H.getReportFullDetail;
 

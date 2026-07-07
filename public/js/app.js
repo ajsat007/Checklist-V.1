@@ -2269,13 +2269,12 @@ function magilToggleDetail(cardEl, sessionId){
 
 function _magilRenderDeep(det, r){
   var html = '';
+  var sid = r.sessionId || det.id.replace('detail_','');
+  var isBus = r.mode === 'bus';
   if (r.units && r.units.length){
-    r.units.forEach(function(u){
-      // FIX: getReportFullDetail sends each unit as
-      // { label, items:[{q, answer, remark}] } — there is no u.name and no
-      // u.answers/u.remarks object, so this always rendered as if every
-      // unit had zero questions, even when real Q&A data existed.
-      html += '<div class="dt-sec">'+esc(u.label||'')+'</div>';
+    r.units.forEach(function(u, idx){
+      var delBtn = isBus ? ' <span onclick="event.stopPropagation();_magilDeleteBus(\''+sid+'\','+idx+',this)" style="color:var(--err);cursor:pointer;font-size:13px" title="हटवा">✕</span>' : '';
+      html += '<div class="dt-sec">'+esc(u.label||'')+delBtn+'</div>';
       (u.items||[]).forEach(function(it){
         html += '<div class="dt-row"><span>'+esc(it.q)+'</span><strong style="color:'+(it.answer==='होय'?'var(--ok)':'var(--err)')+'">'+esc(it.answer)+'</strong></div>';
         if (it.answer==='नाही' && it.remark) {
@@ -2287,6 +2286,32 @@ function _magilRenderDeep(det, r){
     html = '<p class="muted center">तपशील उपलब्ध नाहीत.</p>';
   }
   det.innerHTML = html;
+}
+
+function _magilDeleteBus(sessionId, busIdx, el){
+  if(!confirm('🗑 ही बस एन्ट्री हटवायची?')) return;
+  gRun('deleteBusEntry',function(resStr){
+    var r;try{r=JSON.parse(resStr);}catch(e){return;}
+    if(r.ok){
+      toast(r.msg||'🗑 बस हटवली.','success',3000);
+      delete _magilDeepLoaded[sessionId];
+      var card=document.querySelector('.magil-card[data-session="'+sessionId+'"]');
+      if(card){
+        var det=card.querySelector('.magil-detail');
+        if(det){ det.innerHTML='<p class="muted center">⏳ ताजी माहिती लोड होत आहे...</p>'; }
+        var sub=card.querySelector('.magil-card-sub');
+        if(sub && r.remaining!==undefined){
+          sub.innerHTML=sub.innerHTML.replace(/\d+\s*बस/,''+r.remaining+' बस');
+        }
+        gRun('getSessionDetail',function(res2){
+          var r2;try{r2=JSON.parse(res2);}catch(e){return;}
+          if(r2.ok){_magilDeepLoaded[sessionId]=true;_magilRenderDeep(det,r2);}
+        },function(){},sessionId,(G.emp&&G.emp.id)||'');
+      }
+    }else{
+      toast(r.msg||'हटवता आले नाही.','error');
+    }
+  },function(){toast('नेटवर्क त्रुटी.','error');},sessionId,busIdx,(G.emp&&G.emp.id)||'');
 }
 
 function magilRequestPDF(sessionId, btnEl){
