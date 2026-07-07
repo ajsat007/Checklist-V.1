@@ -30,7 +30,7 @@ const ALLOWED = new Set([
   'checkChecklistCompletedToday', 'createSession',
   'submitAllShifts', 'submitFullChecklist', 'saveBusEntry', 'saveBus',
   'finalizeBusSession', 'finalizeInspection', 'updateUnitAnswers', 'editShift', 'editBus',
-  'deleteSession', 'getSessionForEdit', 'resumeSession', 'listIncompleteSessions',
+  'deleteSession', 'deleteBusEntry', 'getSessionForEdit', 'resumeSession', 'listIncompleteSessions',
   'getMyReports', 'getSupervisorReports', 'getMyReportsPaged', 'getSessionDetail', 'getReportFullDetail',
   'generateSessionPdf', 'generatePdfNow', 'regeneratePDFForSession', 'getSessionPdf',
   'searchReports', 'searchPastInspections', 'peekContinuationSession'

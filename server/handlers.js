@@ -212,9 +212,18 @@ H.createSession = function (payload) {
   const key = _s(payload.checklistKey);
   if (!CHECKLIST_META[key]) return { ok: false, msg: 'अवैध चेकलिस्ट प्रकार.' };
   const m = CHECKLIST_META[key];
+  const iso = (payload.date && /^\d{4}-\d{2}-\d{2}$/.test(String(payload.date))) ? String(payload.date) : _todayISO();
   if (m.mode !== 'bus') {
     const done = H.checkChecklistCompletedToday(payload.id, payload.stn, key, payload.date);
     if (done.completed) { _log('DUPLICATE_BLOCKED', '', { stn: payload.stn, key: key }); return { ok: false, completedToday: true, info: done }; }
+  }
+  // Auto-resume: if an in-progress session exists for same employee+station+checklist+date, return it
+  const existing = db.prepare(
+    "SELECT * FROM sessions WHERE employee_id=? AND station=? AND checklist_key=? AND status!=? AND created_date=? ORDER BY session_id DESC LIMIT 1"
+  ).get(_s(payload.id), _s(payload.stn), key, STATUS.COMPLETED, _isoToDDMM(iso));
+  if (existing) {
+    return { ok: true, sessionId: existing.session_id, tokenId: existing.token_id, mode: m.mode, resumed: true,
+      completedBuses: _parseJSON(existing.buses_json, []), completedShifts: _parseJSON(existing.shifts_json, []) };
   }
   const total = (m.mode === 'shift') ? ((payload.totalShifts === 4 || payload.totalShifts === 6) ? payload.totalShifts : 6) : _unitsForKey(key).length;
   const row = _ensureSessionRow(payload, STATUS.IN_PROCESS, total);
@@ -353,6 +362,22 @@ H.deleteSession = function (sessionId, requestingEmpId) {
   return { ok: true, msg: '🗑 अहवाल हटवला.' };
 };
 
+H.deleteBusEntry = function (sessionId, busIndex, requestingEmpId) {
+  const row = _getSession(sessionId);
+  if (!row) return { ok: false, msg: 'सत्र आढळले नाही.' };
+  if (requestingEmpId && row.employee_id && String(row.employee_id) !== String(requestingEmpId).trim())
+    return { ok: false, msg: 'हे सत्र तुमचे नाही.' };
+  const buses = _parseJSON(row.buses_json, []);
+  const idx = parseInt(busIndex, 10);
+  if (isNaN(idx) || idx < 0 || idx >= buses.length) return { ok: false, msg: 'अवैध बस क्रमांक.' };
+  const removed = buses.splice(idx, 1)[0];
+  db.prepare('UPDATE sessions SET buses_json=?, total_buses=?, last_updated=? WHERE session_id=?')
+    .run(JSON.stringify(buses), buses.length, _istParts().full, sessionId);
+  _log('BUS_DELETE', sessionId, { bus: removed.busNumber, remaining: buses.length });
+  mirrorUpdate(_getSession(sessionId));
+  return { ok: true, remaining: buses.length, msg: '🗑 बस ' + (removed.busNumber || '') + ' हटवली.' };
+};
+
 function _sessionIdentity(row) {
   return {
     sessionId: row.session_id, tokenId: row.token_id,
@@ -433,7 +458,7 @@ H.getMyReports = H.getSupervisorReports;
 H.getMyReportsPaged = function (empId, filterDate, status, offset, search) {
   const id = _s(empId);
   if (!id) return { ok: false, msg: 'कर्मचारी आयडी आवश्यक आहे.' };
-  const LIMIT = 60;
+  const LIMIT = 100;
   offset = Math.max(0, parseInt(offset, 10) || 0);
 
   // Always scoped to this supervisor. Shared by both counts and the page query.

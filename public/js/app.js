@@ -1993,9 +1993,27 @@ function _refreshBusDashPanel(){
         'display:inline-flex;align-items:center;gap:4px;padding:4px 10px;' +
         'background:var(--gold-lt);border:1px solid var(--gold);border-radius:20px;' +
         'font-size:12px;font-weight:700;color:var(--navy);cursor:pointer">' +
-        '🚌 ' + esc(b.busNumber) + '</span>';
+        '🚌 ' + esc(b.busNumber) +
+        ' <span onclick="event.stopPropagation();_deleteBusFromDash(' + i + ')" style="color:var(--err);font-size:14px;cursor:pointer;margin-left:2px" title="हटवा">✕</span>' +
+        '</span>';
     }).join('');
   }
+}
+
+function _deleteBusFromDash(idx){
+  if(!G.sessionId || idx<0 || !G.doneBuses || idx>=G.doneBuses.length) return;
+  var bus=G.doneBuses[idx];
+  if(!confirm('🗑 बस '+(bus.busNumber||'')+' हटवायची?')) return;
+  gRun('deleteBusEntry',function(resStr){
+    var r;try{r=JSON.parse(resStr);}catch(e){return;}
+    if(r.ok){
+      G.doneBuses.splice(idx,1);
+      _refreshBusDashPanel();
+      toast(r.msg||'🗑 बस हटवली.','success',3000);
+    }else{
+      toast(r.msg||'हटवता आले नाही.','error');
+    }
+  },function(){toast('नेटवर्क त्रुटी.','error');},G.sessionId,idx,(G.emp&&G.emp.id)||'');
 }
 
 /* Tap a bus chip in the dashboard to edit that bus's answers */
@@ -2074,7 +2092,7 @@ var MAGIL_TYPE_LABEL = {
 // at a time (the full set is ~24k rows / 10 MB — too big to load at once).
 var _magilStatus = 'all';       // active status chip: all|done|todo|pdf
 var _magilOffset = 0;           // paging cursor
-var _magilLimit = 60;           // must match server LIMIT
+var _magilLimit = 100;          // must match server LIMIT
 var _magilTotal = 0;
 var _magilLoadingMore = false;
 var _magilDeepLoaded = {};
