@@ -210,9 +210,10 @@ function buildReport(sessionId, autoPrint) {
       'html2pdf().set({' +
         'margin:8,' +
         'filename:"' + esc(row.token_id || 'Report') + '.pdf",' +
-        'image:{type:"jpeg",quality:0.95},' +
-        'html2canvas:{scale:2,useCORS:true},' +
-        'jsPDF:{unit:"mm",format:"a4",orientation:"portrait"}' +
+        'image:{type:"jpeg",quality:0.92},' +
+        'html2canvas:{scale:1.5,useCORS:true,scrollY:0,windowHeight:el.scrollHeight+200},' +
+        'jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},' +
+        'pagebreak:{mode:["avoid-all","css","legacy"]}' +
       '}).from(el).save().then(function(){' +
         'btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा / Download PDF";' +
       '});' +
