@@ -25,14 +25,14 @@ const WEEKS = [
 // freq: 'daily' | 'weekly' | 'monthly'
 // mode: 'shift' (6-shift) | 'bus' (per-bus) | 'week' (4-week) | 'single' (one-time)
 const CHECKLIST_META = {
-  bs:   { freq: 'daily',   mode: 'shift',  units: SHIFTS,   label: 'बसस्थानक दैनंदिन तपासणी' },
-  bw:   { freq: 'daily',   mode: 'bus',    units: null,     label: 'बसेस दैनंदिन तपासणी' },
-  gh:   { freq: 'daily',   mode: 'shift',  units: SHIFTS,   label: 'विश्रांतीगृह दैनंदिन तपासणी' },
-  wr:   { freq: 'daily',   mode: 'shift',  units: SHIFTS,   label: 'प्रसाधनगृह दैनंदिन तपासणी' },
-  es:   { freq: 'weekly',  mode: 'week',   units: WEEKS,    label: 'बसस्थानक साप्ताहिक तपासणी' },
-  gh_w: { freq: 'weekly',  mode: 'week',   units: WEEKS,    label: 'विश्रांतीगृह साप्ताहिक तपासणी' },
-  bm:   { freq: 'monthly', mode: 'bus',    units: null,     label: 'बसेस मासिक तपासणी' },
-  sm:   { freq: 'monthly', mode: 'single', units: ['एकदा'], label: 'बसस्थानक मासिक तपासणी' }
+  bs:   { freq: 'daily',   mode: 'shift',  units: SHIFTS,   label: 'बसस्थानक स्वच्छता दैनंदिन तपासणी' },
+  bw:   { freq: 'daily',   mode: 'bus',    units: null,     label: 'बसेस स्वच्छता दैनंदिन तपासणी' },
+  gh:   { freq: 'daily',   mode: 'shift',  units: SHIFTS,   label: 'िश्रांतीगृह स्वच्छता दैनंदिन तपासणी' },
+  wr:   { freq: 'daily',   mode: 'shift',  units: SHIFTS,   label: 'प्रसाधनगृह स्वच्छता दैनंदिन तपासण' },
+  es:   { freq: 'weekly',  mode: 'week',   units: WEEKS,    label: 'बसस्थानक स्वच्छता-आठवड्यातून एकदा करावयाची स्वच्छता तपासण' },
+  gh_w: { freq: 'weekly',  mode: 'week',   units: WEEKS,    label: 'चालक वाहक विश्रांतीगृह स्वच्छता व सोयीसुविधा -आठवड्यातून एकदा तपासणी' },
+  bm:   { freq: 'monthly', mode: 'bus',    units: null,     label: 'बसेस स्वच्छता-महिन्यातून एकदा करावयाची स्वच्छता तपासणी' },
+  sm:   { freq: 'monthly', mode: 'single', units: ['एकदा'], label: 'बसस्थानक स्वच्छता- महिन्यातून एकदा करावयाची स्वच्छता तपासणी' }
 };
 
 const CHECKLIST_TITLES = {
