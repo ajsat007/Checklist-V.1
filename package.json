@@ -1,11 +1,14 @@
 {
   "name": "msrtc-checklist",
-  "version": "1.0.0",
-  "description": "MSRTC Smart Mechanized Cleaning — plain HTML/CSS/JS frontend + zero-dependency Node.js/SQLite backend",
+  "version": "1.1.0",
+  "description": "MSRTC Smart Mechanized Cleaning — plain HTML/CSS/JS frontend + Node.js/SQLite backend. PDF reports are rendered server-side with headless Chromium (Puppeteer) for correct Devanagari text shaping.",
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
     "seed": "node server/seed.js"
   },
-  "engines": { "node": ">=22.13" }
+  "engines": { "node": ">=22.13" },
+  "dependencies": {
+    "puppeteer": "^25.3.0"
+  }
 }
