@@ -1,8 +1,9 @@
 /* =====================================================================
-   server.js — the whole backend, ZERO npm dependencies (Node >= 22.13).
-     POST /exec        { fn, args } -> dispatch to a whitelisted handler
-     GET  /report/:id  printable Marathi inspection report (Print -> PDF)
-     GET  /*           static SPA files from ../public
+   server.js — the whole backend (Node >= 22.13).
+     POST /exec              { fn, args } -> dispatch to a whitelisted handler
+     GET  /report/:id        printable Marathi inspection report (Print -> PDF)
+     GET  /report/:id/download   server-rendered PDF (headless Chromium)
+     GET  /*                 static SPA files from ../public
    Run:  node server/server.js     (or: npm start)
    ===================================================================== */
 'use strict';
@@ -14,6 +15,7 @@ const fs   = require('fs');
 const seed = require('./seed');
 const { H } = require('./handlers');
 const { buildReport } = require('./report');
+const { renderSessionPDF, closeBrowser } = require('./pdf');
 const db = require('./db');
 const { loadFromSheet } = require('./sheet-sync');
 const { sheetsEnabled } = require('./sheets');
@@ -100,12 +102,38 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // ---- GET /report/:id : printable report ----
+  // ---- GET /report/:id/download : real server-rendered PDF (Chromium) ----
+  // Must be checked BEFORE the plain /report/:id route below.
+  if (req.method === 'GET' && url.startsWith('/report/') && url.split('?')[0].endsWith('/download')) {
+    const path0 = url.split('?')[0];
+    const id = decodeURIComponent(path0.slice('/report/'.length, path0.length - '/download'.length));
+    try {
+      const baseUrl = 'http://127.0.0.1:' + PORT;
+      const pdfBuf = await renderSessionPDF(id, baseUrl);
+      const row = require('./handlers')._getSession(id);
+      const safeName = ((row && row.token_id) || id).replace(/[^A-Za-z0-9_\-]/g, '_') + '.pdf';
+      res.writeHead(200, {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': 'attachment; filename="' + safeName + '"',
+        'Content-Length': pdfBuf.length,
+        'Cache-Control': 'no-store'
+      });
+      return res.end(pdfBuf);
+    } catch (err) {
+      console.error('[pdf]', err);
+      return send(res, 500, 'PDF generation failed: ' + (err && err.message ? err.message : err), 'text/plain');
+    }
+  }
+
+  // ---- GET /report/:id : printable report (viewable in-browser; add ?pdf=1
+  //      for the bare version with no toolbar, used internally by pdf.js) ----
   if (req.method === 'GET' && url.startsWith('/report/')) {
     const q = url.indexOf('?');
     const id = decodeURIComponent(url.slice('/report/'.length, q === -1 ? undefined : q));
-    const autoPrint = q !== -1 && url.slice(q).indexOf('print=1') !== -1;
-    return send(res, 200, buildReport(id, autoPrint), 'text/html; charset=utf-8');
+    const qs = q === -1 ? '' : url.slice(q);
+    const autoPrint = qs.indexOf('print=1') !== -1;
+    const forPdf = qs.indexOf('pdf=1') !== -1;
+    return send(res, 200, buildReport(id, autoPrint, { forPdf }), 'text/html; charset=utf-8');
   }
 
   if (req.method === 'GET' && url.split('?')[0] === '/health') {
@@ -164,3 +192,14 @@ const server = http.createServer(async (req, res) => {
     console.log('MSRTC Checklist server running → http://localhost:' + PORT);
   });
 })();
+
+// Close the headless Chromium instance cleanly on shutdown (Render sends
+// SIGTERM on redeploy/restart/sleep) so no orphaned process is left behind.
+['SIGTERM', 'SIGINT'].forEach((sig) => {
+  process.on(sig, async () => {
+    console.log('[shutdown] ' + sig + ' received, closing server...');
+    server.close();
+    await closeBrowser();
+    process.exit(0);
+  });
+});
