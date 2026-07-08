@@ -192,14 +192,31 @@ function buildReport(sessionId, autoPrint, options) {
            '<h2>अहवाल आढळला नाही</h2><p>Report not found for session ' + esc(sessionId) + '.</p></body>';
   }
   const forPdf = options && options.forPdf;
+  const sessionEnc = encodeURIComponent(sessionId);
+  const tokenSafe = esc((row && row.token_id) || 'report');
   const toolbarHtml = forPdf ? '' :
     '<div class="toolbar">' +
-    '<button class="dl-btn" onclick="window.print()">📥 PDF डाउनलोड करा</button>' +
-    '<button onclick="window.print()">🖨️ प्रिंट करा / Print</button>' +
+    '<button class="dl-btn" id="pdfDlBtn">📥 PDF डाउनलोड करा</button>' +
     '</div>' +
-    '<div style="text-align:center;max-width:1000px;margin:4px auto;color:#888;font-size:11px;line-height:1.5">' +
-    'PDF तयार करण्यासाठी वरील बटणावर क्लिक करा — मग <strong>गंतव्य स्थान = Save as PDF</strong> निवडा. ' +
-    'फॉन्ट अचूक येण्यासाठी ही पद्धत वापरली आहे.</div>';
+    '<script>' +
+    'document.getElementById("pdfDlBtn").onclick=async function(){' +
+      'var btn=this;btn.disabled=true;btn.textContent="⏳ तयार होत आहे...";' +
+      'try{' +
+        'var resp=await fetch("/report/' + sessionEnc + '/download");' +
+        'if(!resp.ok) throw new Error("HTTP "+resp.status);' +
+        'var blob=await resp.blob();' +
+        'var url=URL.createObjectURL(blob);' +
+        'var a=document.createElement("a");a.href=url;a.download="' + tokenSafe + '.pdf";' +
+        'document.body.appendChild(a);a.click();a.remove();' +
+        'setTimeout(function(){URL.revokeObjectURL(url);},15000);' +
+        'btn.textContent="✅ डाउनलोड झाले!";' +
+        'setTimeout(function(){btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा";},2000);' +
+      '}catch(err){' +
+        'alert("PDF डाउनलोड अयशस्वी: "+err.message+"\\n\\nकृपया नंतर पुन्हा प्रयत्न करा.");' +
+        'btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा";' +
+      '}' +
+    '};' +
+    '<\/script>';
   const html =
     '<!doctype html><html lang="mr"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
