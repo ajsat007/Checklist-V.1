@@ -22,6 +22,7 @@ const { sheetsEnabled } = require('./sheets');
 
 // Seed sample master data on first boot (idempotent).
 seed();
+require('./pdf').warmup();
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PORT = process.env.PORT || 3000;
