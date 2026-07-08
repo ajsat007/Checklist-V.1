@@ -1,28 +1,11 @@
-/* =====================================================================
-   pdf.js — server-side PDF generation via headless Chromium (Puppeteer).
-
-   WHY THIS EXISTS
-   ----------------
-   The old flow generated PDFs in the browser with html2pdf.js, which
-   rasterizes the DOM to a JPEG via html2canvas. html2canvas does its own
-   text layout instead of using the browser's real OpenType shaping
-   engine, so Devanagari broke: dropped/substituted characters, broken
-   conjuncts, mispositioned matras, occasional tofu boxes, blurry output.
-
-   This module instead asks a real headless Chrome to print the exact
-   same report page to PDF (page.pdf()). Chromium's native text engine
-   does correct Indic-script shaping, so the resulting PDF has real,
-   crisp, selectable, correctly-shaped text.
-   ===================================================================== */
 'use strict';
 
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
 
 let browserPromise = null;
 let launching = false;
 
-/* Reuse a single browser instance across requests (Chromium startup is
-   the slow part, ~1-2s). If it crashes, the next call relaunches it. */
 async function getBrowser() {
   if (browserPromise) {
     try {
@@ -33,65 +16,43 @@ async function getBrowser() {
   }
   if (!launching) {
     launching = true;
-   browserPromise = puppeteer.launch({
+    browserPromise = puppeteer.launch({
       headless: true,
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-     args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-zygote',
-        '--single-process',
-        '--font-render-hinting=none'
-      ]
+      args: chromium.args,
+      executablePath: await chromium.executablePath()
     }).finally(() => { launching = false; });
   }
   return browserPromise;
 }
 
-/**
- * Render a session's inspection report to a PDF buffer.
- * @param {string} sessionId
- * @param {string} baseUrl  e.g. `http://127.0.0.1:${PORT}` — renders the
- *   server's OWN /report/:id route internally (loopback request), so the
- *   PDF is byte-for-byte what a user sees on screen.
- * @returns {Promise<Buffer>}
- */
 async function renderSessionPDF(sessionId, baseUrl) {
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
     await page.setViewport({ width: 900, height: 1400 });
     const url = baseUrl + '/report/' + encodeURIComponent(sessionId) + '?pdf=1';
-    const resp = await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+    const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     if (!resp || !resp.ok()) {
       throw new Error('Report page failed to load (HTTP ' + (resp ? resp.status() : '?') + ')');
     }
-    // Belt-and-braces wait for fonts, even though font-display:block
-    // already blocks first paint on this.
     await page.evaluate(() => document.fonts && document.fonts.ready);
-
-    const pdfBuffer = await page.pdf({
-      printBackground: true,
-      preferCSSPageSize: true,   // honor @page { size:A4; margin:8mm } in report.js CSS
-      timeout: 30000
-    });
-    return pdfBuffer;
+    return await page.pdf({ printBackground: true, preferCSSPageSize: true, timeout: 30000 });
   } finally {
     await page.close().catch(() => {});
   }
 }
 
-/* Call on shutdown (SIGTERM/SIGINT) so Render's redeploy/restart cycle
-   doesn't leave an orphaned Chromium process behind. */
+function warmup() {
+  getBrowser().catch((e) => console.error('[pdf] warmup failed:', e.message));
+}
+
 async function closeBrowser() {
   if (!browserPromise) return;
   try {
     const b = await browserPromise;
     if (b) await b.close();
-  } catch (e) { /* already gone */ }
+  } catch (e) {}
   browserPromise = null;
 }
 
-module.exports = { renderSessionPDF, closeBrowser };
+module.exports = { renderSessionPDF, closeBrowser, warmup };
