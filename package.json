@@ -8,7 +8,7 @@
     "seed": "node server/seed.js"
   },
   "engines": { "node": ">=22.13" },
-  "dependencies": {
+ "dependencies": {
     "puppeteer-core": "^24.10.0",
     "@sparticuz/chromium": "^131.0.1"
   }
