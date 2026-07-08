@@ -191,7 +191,6 @@ function buildReport(sessionId, autoPrint, opts) {
   const toolbar = forPdf ? '' :
     '<div class="toolbar">' +
     '<button class="dl-btn" onclick="downloadPDF()">📥 PDF डाउनलोड करा / Download PDF</button>' +
-    '<button onclick="window.print()">🖨️ प्रिंट करा / Print</button>' +
     '</div>';
    const downloadScript = forPdf ? '' :
     '<script>' +
