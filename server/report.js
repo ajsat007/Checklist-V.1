@@ -185,12 +185,21 @@ function buildBody(row) {
   return unitTable(row, units);
 }
 
-function buildReport(sessionId, autoPrint) {
+function buildReport(sessionId, autoPrint, options) {
   const row = _getSession(sessionId);
   if (!row) {
     return '<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;padding:40px;text-align:center">' +
            '<h2>अहवाल आढळला नाही</h2><p>Report not found for session ' + esc(sessionId) + '.</p></body>';
   }
+  const forPdf = options && options.forPdf;
+  const toolbarHtml = forPdf ? '' :
+    '<div class="toolbar">' +
+    '<button class="dl-btn" onclick="window.print()">📥 PDF डाउनलोड करा</button>' +
+    '<button onclick="window.print()">🖨️ प्रिंट करा / Print</button>' +
+    '</div>' +
+    '<div style="text-align:center;max-width:1000px;margin:4px auto;color:#888;font-size:11px;line-height:1.5">' +
+    'PDF तयार करण्यासाठी वरील बटणावर क्लिक करा — मग <strong>गंतव्य स्थान = Save as PDF</strong> निवडा. ' +
+    'फॉन्ट अचूक येण्यासाठी ही पद्धत वापरली आहे.</div>';
   const html =
     '<!doctype html><html lang="mr"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
@@ -199,13 +208,7 @@ function buildReport(sessionId, autoPrint) {
     '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700;800&display=swap" rel="stylesheet">' +
     '<style>' + CSS + '</style>' +
     '</head><body>' +
-    '<div class="toolbar">' +
-    '<button class="dl-btn" onclick="window.print()">📥 PDF डाउनलोड करा</button>' +
-    '<button onclick="window.print()">🖨️ प्रिंट करा / Print</button>' +
-    '</div>' +
-    '<div style="text-align:center;max-width:1000px;margin:4px auto;color:#888;font-size:11px;line-height:1.5">' +
-    'PDF तयार करण्यासाठी वरील बटणावर क्लिक करा — मग <strong>गंतव्य स्थान = Save as PDF</strong> निवडा. ' +
-    'फॉन्ट अचूक येण्यासाठी ही पद्धत वापरली आहे.</div>' +
+    toolbarHtml +
     '<div class="sheet" id="reportSheet">' +
       headerBlock(row) +
       buildBody(row) +
