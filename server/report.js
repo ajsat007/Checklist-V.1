@@ -193,20 +193,31 @@ function buildReport(sessionId, autoPrint, opts) {
     '<button class="dl-btn" onclick="downloadPDF()">📥 PDF डाउनलोड करा / Download PDF</button>' +
     '<button onclick="window.print()">🖨️ प्रिंट करा / Print</button>' +
     '</div>';
-  const downloadScript = forPdf ? '' :
+   const downloadScript = forPdf ? '' :
     '<script>' +
-    'function downloadPDF(){' +
+    'async function downloadPDF(){' +
       'var btn=document.querySelector(".dl-btn");' +
       'var orig=btn.textContent;' +
-      'btn.disabled=true;btn.textContent="⏳ तयार होत आहे...";' +
-      'var a=document.createElement("a");' +
-      'a.href="' + REPORT_BASE + encodeURIComponent(sessionId) + '/download";' +
-      'a.download="' + esc(row.token_id || 'Report') + '.pdf";' +
-      'document.body.appendChild(a);a.click();a.remove();' +
-      'setTimeout(function(){btn.disabled=false;btn.textContent=orig;},1500);' +
+      'btn.disabled=true;btn.textContent="⏳ तयार होत आहे... (30-40 सेकंद)";' +
+      'try{' +
+        'var resp=await fetch("' + REPORT_BASE + encodeURIComponent(sessionId) + '/download");' +
+        'if(!resp.ok){throw new Error("Server error " + resp.status);}' +
+        'var blob=await resp.blob();' +
+        'var url=URL.createObjectURL(blob);' +
+        'var a=document.createElement("a");' +
+        'a.href=url;' +
+        'a.download="' + esc(row.token_id || 'Report') + '.pdf";' +
+        'document.body.appendChild(a);a.click();a.remove();' +
+        'setTimeout(function(){URL.revokeObjectURL(url);},15000);' +
+        'btn.textContent="✅ डाउनलोड झाले!";' +
+        'setTimeout(function(){btn.disabled=false;btn.textContent=orig;},2000);' +
+      '}catch(err){' +
+        'alert("PDF डाउनलोड अयशस्वी / Download failed: " + err.message);' +
+        'btn.disabled=false;btn.textContent=orig;' +
+      '}' +
     '}' +
     '<\/script>';
-  const html =
+   const html =
     '<!doctype html><html lang="mr"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<title>' + esc(row.token_id || 'Report') + '</title>' +
