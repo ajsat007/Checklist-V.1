@@ -1,208 +1,112 @@
 /* =====================================================================
-   server.js — the whole backend (Node >= 22.13).
-     POST /exec              { fn, args } -> dispatch to a whitelisted handler
-     GET  /report/:id        printable Marathi inspection report (Print -> PDF)
-     GET  /report/:id/download   server-rendered PDF (headless Chromium)
-     GET  /*                 static SPA files from ../public
-   Run:  node server/server.js     (or: npm start)
+   pdf.js — server-side PDF generation via headless Chromium (Puppeteer).
+
+   WHY THIS EXISTS
+   ----------------
+   The old flow generated PDFs in the user's browser with html2pdf.js,
+   which rasterizes the DOM to a JPEG using html2canvas. html2canvas does
+   its own text layout instead of using the browser's real OpenType
+   shaping engine, so Devanagari broke: dropped/substituted characters,
+   broken conjuncts, mispositioned matras, occasional tofu boxes, blurry
+   non-searchable output.
+
+   This module instead asks a real headless Chrome to print the exact
+   same report page to PDF (page.pdf()). Chromium's native text engine
+   does correct Indic-script shaping, so the resulting PDF has real,
+   crisp, selectable, correctly-shaped text.
+
+   USAGE
+   -----
+   const { renderSessionPDF, warmup } = require('./pdf');
+   warmup();  // call once at server boot
+   const buf = await renderSessionPDF(sessionId, `http://127.0.0.1:${PORT}`);
    ===================================================================== */
 'use strict';
 
-const http = require('http');
-const path = require('path');
-const fs   = require('fs');
+const puppeteer = require('puppeteer');
 
-const seed = require('./seed');
-const { H } = require('./handlers');
-const { buildReport } = require('./report');
-const { renderSessionPDF, closeBrowser } = require('./pdf');
-const db = require('./db');
-const { loadFromSheet } = require('./sheet-sync');
-const { sheetsEnabled } = require('./sheets');
+let browserPromise = null;
+let launching = false;
 
-// Seed sample master data on first boot (idempotent).
-seed();
-require('./pdf').warmup();
-
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
-const PORT = process.env.PORT || 3000;
-
-// Whitelist of callable functions (never dispatch arbitrary names).
-const ALLOWED = new Set([
-  'getBootData', 'getDistrictData', 'loginSupervisor', 'lookupSupervisorName', 'getEmployeeStats',
-  'checkChecklistCompletedToday', 'createSession',
-  'submitAllShifts', 'submitFullChecklist', 'saveBusEntry', 'saveBus',
-  'finalizeBusSession', 'finalizeInspection', 'updateUnitAnswers', 'editShift', 'editBus',
-  'deleteSession', 'deleteBusEntry', 'getSessionForEdit', 'resumeSession', 'listIncompleteSessions',
-  'getMyReports', 'getSupervisorReports', 'getMyReportsPaged', 'getSessionDetail', 'getReportFullDetail',
-  'generateSessionPdf', 'generatePdfNow', 'regeneratePDFForSession', 'getSessionPdf',
-  'searchReports', 'searchPastInspections', 'peekContinuationSession',
-  'fixPartialShiftSessions'
-]);
-
-const MIME = {
-  '.html': 'text/html; charset=utf-8',
-  '.css':  'text/css; charset=utf-8',
-  '.js':   'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png':  'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-  '.svg':  'image/svg+xml', '.ico': 'image/x-icon',
-  '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf'
-};
-
-function send(res, status, body, type) {
-  res.writeHead(status, { 'Content-Type': type || 'application/json; charset=utf-8' });
-  res.end(body);
+/* Reuse a single browser instance across requests (Chromium startup is
+   the slow part, ~1-2s). If it crashes, the next call relaunches it. */
+async function getBrowser() {
+  if (browserPromise) {
+    try {
+      const b = await browserPromise;
+      if (b && b.isConnected()) return b;
+    } catch (e) { /* fall through and relaunch */ }
+    browserPromise = null;
+  }
+  if (!launching) {
+    launching = true;
+    browserPromise = puppeteer.launch({
+      headless: true,
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--font-render-hinting=none'
+      ]
+    }).finally(() => { launching = false; });
+  }
+  return browserPromise;
 }
 
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    let size = 0;
-    req.on('data', (c) => {
-      size += c.length;
-      if (size > 2 * 1024 * 1024) { reject(new Error('body too large')); req.destroy(); return; }
-      data += c;
+/**
+ * Render a session's inspection report to a PDF buffer.
+ * @param {string} sessionId
+ * @param {string} baseUrl  e.g. `http://127.0.0.1:${PORT}` — renders the
+ *   server's OWN /report/:id route internally (loopback request), so the
+ *   PDF is byte-for-byte what a user sees on screen.
+ * @returns {Promise<Buffer>}
+ */
+async function renderSessionPDF(sessionId, baseUrl) {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setViewport({ width: 900, height: 1400 });
+    const url = baseUrl + '/report/' + encodeURIComponent(sessionId) + '?pdf=1';
+    const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    if (!resp || !resp.ok()) {
+      throw new Error('Report page failed to load (HTTP ' + (resp ? resp.status() : '?') + ')');
+    }
+    // Explicitly wait for every @font-face to finish loading/parsing
+    // before snapshotting (we don't need networkidle0 since there are no
+    // external network calls — fonts are self-hosted).
+    await page.evaluate(() => document.fonts && document.fonts.ready);
+
+    const pdfBuffer = await page.pdf({
+      printBackground: true,
+      preferCSSPageSize: true,   // honor @page { size:A4; margin:8mm } in report.js CSS
+      timeout: 30000
     });
-    req.on('end', () => resolve(data));
-    req.on('error', reject);
-  });
+    return pdfBuffer;
+  } finally {
+    await page.close().catch(() => {});
+  }
 }
 
-function serveStatic(res, urlPath) {
-  let rel = decodeURIComponent(urlPath.split('?')[0]);
-  if (rel === '/' || rel === '') rel = '/index.html';
-  // prevent path traversal: resolve inside PUBLIC_DIR only
-  const abs = path.normalize(path.join(PUBLIC_DIR, rel));
-  if (!abs.startsWith(PUBLIC_DIR)) return send(res, 403, 'Forbidden', 'text/plain');
-  fs.readFile(abs, (err, buf) => {
-    if (err) return send(res, 404, 'Not found', 'text/plain');
-    send(res, 200, buf, MIME[path.extname(abs).toLowerCase()] || 'application/octet-stream');
-  });
+/* Call once at server boot to launch Chromium immediately, instead of
+   waiting for the first user's click. Removes Chromium's ~1-2s launch
+   time from that first request's time budget. Fire-and-forget: if this
+   fails, the first real request just launches it instead (same as
+   before this existed). */
+function warmup() {
+  getBrowser().catch((e) => console.error('[pdf] warmup failed (will retry on first request):', e.message));
 }
 
-const server = http.createServer(async (req, res) => {
-  const url = req.url || '/';
+/* Call on shutdown (SIGTERM/SIGINT) so Render's redeploy/restart cycle
+   doesn't leave an orphaned Chromium process behind. */
+async function closeBrowser() {
+  if (!browserPromise) return;
+  try {
+    const b = await browserPromise;
+    if (b) await b.close();
+  } catch (e) { /* already gone */ }
+  browserPromise = null;
+}
 
-  // ---- POST /exec : { fn, args } dispatcher ----
-  if (req.method === 'POST' && url === '/exec') {
-    try {
-      const raw = await readBody(req);
-      let body = {};
-      try { body = JSON.parse(raw || '{}'); } catch (e) { body = {}; }
-      const fn = body.fn;
-      const args = Array.isArray(body.args) ? body.args : [];
-      if (!ALLOWED.has(fn) || typeof H[fn] !== 'function') {
-        return send(res, 200, JSON.stringify({ ok: false, msg: 'Function not allowed: ' + fn }));
-      }
-      const result = await H[fn].apply(null, args);   // handlers may be async (Sheet mirror)
-      return send(res, 200, typeof result === 'string' ? result : JSON.stringify(result));
-    } catch (err) {
-      console.error('[exec]', err);
-      return send(res, 200, JSON.stringify({ ok: false, msg: 'Server error: ' + (err && err.message ? err.message : err) }));
-    }
-  }
-
-  // ---- GET /report/:id/download : real server-rendered PDF (Chromium) ----
-  // Must be checked BEFORE the plain /report/:id route below.
-  if (req.method === 'GET' && url.startsWith('/report/') && url.split('?')[0].endsWith('/download')) {
-    const path0 = url.split('?')[0];
-    const id = decodeURIComponent(path0.slice('/report/'.length, path0.length - '/download'.length));
-    try {
-      const baseUrl = 'http://127.0.0.1:' + PORT;
-      const pdfBuf = await renderSessionPDF(id, baseUrl);
-      const row = require('./handlers')._getSession(id);
-      const safeName = ((row && row.token_id) || id).replace(/[^A-Za-z0-9_\-]/g, '_') + '.pdf';
-      res.writeHead(200, {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': 'attachment; filename="' + safeName + '"',
-        'Content-Length': pdfBuf.length,
-        'Cache-Control': 'no-store'
-      });
-      return res.end(pdfBuf);
-    } catch (err) {
-      console.error('[pdf]', err);
-      return send(res, 500, 'PDF generation failed: ' + (err && err.message ? err.message : err), 'text/plain');
-    }
-  }
-
-  // ---- GET /report/:id : printable report (viewable in-browser; add ?pdf=1
-  //      for the bare version with no toolbar, used internally by pdf.js) ----
-  if (req.method === 'GET' && url.startsWith('/report/')) {
-    const q = url.indexOf('?');
-    const id = decodeURIComponent(url.slice('/report/'.length, q === -1 ? undefined : q));
-    const qs = q === -1 ? '' : url.slice(q);
-    const autoPrint = qs.indexOf('print=1') !== -1;
-    const forPdf = qs.indexOf('pdf=1') !== -1;
-    return send(res, 200, buildReport(id, autoPrint, { forPdf }), 'text/html; charset=utf-8');
-  }
-
-  if (req.method === 'GET' && url.split('?')[0] === '/health') {
-    return send(res, 200, JSON.stringify({ ok: true }));
-  }
-
-  // ---- GET /backup?key=ADMIN_KEY : download a consistent DB snapshot ----
-  // Set the ADMIN_KEY environment variable to enable. VACUUM INTO produces a
-  // clean single-file copy that is safe to take while the app is running.
-  if (req.method === 'GET' && url.split('?')[0] === '/backup') {
-    const adminKey = process.env.ADMIN_KEY || '';
-    const givenKey = (url.split('key=')[1] || '').split('&')[0];
-    if (!adminKey) return send(res, 404, 'Backups disabled (set ADMIN_KEY).', 'text/plain');
-    if (givenKey !== adminKey) return send(res, 403, 'Forbidden', 'text/plain');
-    try {
-      const db = require('./db');
-      const os = require('os');
-      const tmp = path.join(os.tmpdir(), 'msrtc-backup-' + Date.now() + '.db');
-      db.exec("VACUUM INTO '" + tmp.replace(/'/g, "''").replace(/\\/g, '/') + "'");
-      const buf = fs.readFileSync(tmp);
-      fs.unlink(tmp, () => {});
-      res.writeHead(200, {
-        'Content-Type': 'application/octet-stream',
-        'Content-Disposition': 'attachment; filename="msrtc-checklist-backup.db"'
-      });
-      return res.end(buf);
-    } catch (err) {
-      console.error('[backup]', err);
-      return send(res, 500, 'Backup failed: ' + err.message, 'text/plain');
-    }
-  }
-
-  // ---- static SPA ----
-  if (req.method === 'GET') return serveStatic(res, url);
-
-  send(res, 405, 'Method not allowed', 'text/plain');
-});
-
-/* Boot: when Google Sheet env vars are set, restore ALL sessions from the
-   Sheet into SQLite BEFORE serving traffic (this is what makes history
-   survive Render free-plan restarts). Without env vars, start as before. */
-(async () => {
- if (sheetsEnabled()) {
-    try {
-      const t0 = Date.now();
-      const timeout = new Promise((_, rej) =>
-        setTimeout(() => rej(new Error('Sheet restore timed out after 20s')), 20000));
-      const r = await Promise.race([loadFromSheet(db), timeout]);
-      console.log('[boot] restored %d sessions from Google Sheet in %ds',
-        r.loaded, Math.round((Date.now() - t0) / 1000));
-    } catch (e) {
-      console.error('[boot] Sheet restore FAILED or timed out (continuing with local data):', e.message);
-    }
-  } else {
-   console.log('[boot] Sheet sync disabled (SHEET_ID / GOOGLE_SA_* env vars not set)');
-  }
-  server.listen(PORT, () => {
-    console.log('MSRTC Checklist server running → http://localhost:' + PORT);
-  });
-})();
-
-// Close the headless Chromium instance cleanly on shutdown (Render sends
-// SIGTERM on redeploy/restart/sleep) so no orphaned process is left behind.
-['SIGTERM', 'SIGINT'].forEach((sig) => {
-  process.on(sig, async () => {
-    console.log('[shutdown] ' + sig + ' received, closing server...');
-    server.close();
-    await closeBrowser();
-    process.exit(0);
-  });
-});
+module.exports = { renderSessionPDF, closeBrowser, warmup };
