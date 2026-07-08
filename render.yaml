@@ -1,5 +1,8 @@
 # Render Blueprint — deploy with "New + → Blueprint" after pushing to GitHub.
 #
+# Runs via Docker (see Dockerfile) so headless Chromium has all the system
+# libraries it needs — Render's native Node runtime can't install those.
+#
 # CONFIGURED FOR THE FREE PLAN.
 #   ⚠️ Free plan = NO persistent disk: the SQLite database is WIPED whenever
 #   the service redeploys, restarts, or wakes from sleep (it sleeps after
@@ -9,23 +12,19 @@
 #   - Inspection records are NOT safe — download snapshots regularly from
 #     /backup?key=<ADMIN_KEY>  (key is in the service's Environment tab).
 #
-#   ⚠️ PDF generation now uses headless Chromium (Puppeteer) so Devanagari
-#   text renders correctly. `npm install` will download a bundled Chromium
-#   (~250-300MB) during build — this is normal and only happens at build
-#   time, not per-request. Free plan has 512MB RAM; a single headless page
-#   render typically uses ~100-150MB, which fits, but if you see PDF
-#   downloads fail with "Target closed"/OOM errors under load, upgrade to
-#   `plan: starter` for more memory headroom.
+#   ⚠️ Docker builds take longer than the plain Node buildCommand did
+#   (installing Chromium + libraries via apt-get). This only happens at
+#   build time, not per-request, and Render caches Docker layers so
+#   rebuilds after the first one are faster.
 #
 # UPGRADE LATER (real data safety, ~$7/mo): set `plan: starter` and uncomment
 # the disk + DATA_DIR lines below, then push.
 services:
   - type: web
     name: msrtc-checklist
-    runtime: node
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     plan: free
-    buildCommand: "npm install"   # installs puppeteer + bundled Chromium
-    startCommand: node server/server.js
     healthCheckPath: /health
     envVars:
       - key: ADMIN_KEY
