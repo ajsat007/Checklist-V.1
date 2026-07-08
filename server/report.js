@@ -10,6 +10,7 @@ const cfg = require('./checklist-config');
 const { CHECKLIST_META, CHECKLIST_TITLES, FALLBACK_QUESTIONS, PENALTIES, SIG_LABELS, SHIFTS, WEEKS, APP } = cfg;
 const { _getSession, _parseJSON } = require('./handlers');
 
+const REPORT_BASE = '/report/';
 const DEV_DIGITS = ['०','१','२','३','४','५','६','७','८','९'];
 function mn(n) { return String(n).replace(/[0-9]/g, d => DEV_DIGITS[+d]); }
 function esc(s) {
@@ -176,25 +177,43 @@ function buildBody(row) {
   return unitTable(row, units);
 }
 
-function buildReport(sessionId, autoPrint) {
+/* forPdf=true renders the BARE sheet (no toolbar, no print-trigger script).
+   This is the exact HTML that server/pdf.js loads into headless Chromium to
+   produce the actual downloadable PDF, so what you see in the browser tab
+   is pixel-identical to what ends up in the PDF. */
+function buildReport(sessionId, autoPrint, opts) {
+  const forPdf = !!(opts && opts.forPdf);
   const row = _getSession(sessionId);
   if (!row) {
     return '<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;padding:40px;text-align:center">' +
            '<h2>अहवाल आढळला नाही</h2><p>Report not found for session ' + esc(sessionId) + '.</p></body>';
   }
+  const toolbar = forPdf ? '' :
+    '<div class="toolbar">' +
+    '<button class="dl-btn" onclick="downloadPDF()">📥 PDF डाउनलोड करा / Download PDF</button>' +
+    '<button onclick="window.print()">🖨️ प्रिंट करा / Print</button>' +
+    '</div>';
+  const downloadScript = forPdf ? '' :
+    '<script>' +
+    'function downloadPDF(){' +
+      'var btn=document.querySelector(".dl-btn");' +
+      'var orig=btn.textContent;' +
+      'btn.disabled=true;btn.textContent="⏳ तयार होत आहे...";' +
+      'var a=document.createElement("a");' +
+      'a.href="' + REPORT_BASE + encodeURIComponent(sessionId) + '/download";' +
+      'a.download="' + esc(row.token_id || 'Report') + '.pdf";' +
+      'document.body.appendChild(a);a.click();a.remove();' +
+      'setTimeout(function(){btn.disabled=false;btn.textContent=orig;},1500);' +
+    '}' +
+    '<\/script>';
   const html =
     '<!doctype html><html lang="mr"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<title>' + esc(row.token_id || 'Report') + '</title>' +
-    '<link rel="preconnect" href="https://fonts.googleapis.com">' +
-    '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700;800&display=swap" rel="stylesheet">' +
+    '<link rel="stylesheet" href="/fonts/fonts.css">' +
     '<style>' + CSS + '</style>' +
-    '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"><\/script>' +
     '</head><body>' +
-    '<div class="toolbar">' +
-    '<button class="dl-btn" onclick="downloadPDF()">📥 PDF डाउनलोड करा / Download PDF</button>' +
-    '<button onclick="window.print()">🖨️ प्रिंट करा / Print</button>' +
-    '</div>' +
+    toolbar +
     '<div class="sheet" id="reportSheet">' +
       headerBlock(row) +
       buildBody(row) +
@@ -202,23 +221,7 @@ function buildReport(sessionId, autoPrint) {
       sigBlock(row.checklist_key, row) +
       footerBlock(row) +
     '</div>' +
-    '<script>' +
-    'function downloadPDF(){' +
-      'var btn=document.querySelector(".dl-btn");' +
-      'btn.disabled=true;btn.textContent="⏳ तयार होत आहे...";' +
-      'var el=document.getElementById("reportSheet");' +
-      'html2pdf().set({' +
-        'margin:8,' +
-        'filename:"' + esc(row.token_id || 'Report') + '.pdf",' +
-        'image:{type:"jpeg",quality:0.92},' +
-        'html2canvas:{scale:1.5,useCORS:true,scrollY:0,windowHeight:el.scrollHeight+200},' +
-        'jsPDF:{unit:"mm",format:"a4",orientation:"portrait"},' +
-        'pagebreak:{mode:["avoid-all","css","legacy"]}' +
-      '}).from(el).save().then(function(){' +
-        'btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा / Download PDF";' +
-      '});' +
-    '}' +
-    '<\/script>' +
+    downloadScript +
     (autoPrint ? '<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},400);});<\/script>' : '') +
     '</body></html>';
   return html;
