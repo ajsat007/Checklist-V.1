@@ -1,7 +1,8 @@
 # Render Blueprint — deploy with "New + → Blueprint" after pushing to GitHub.
 #
-# Runs via Docker (see Dockerfile) so headless Chromium has all the system
-# libraries it needs — Render's native Node runtime can't install those.
+# PDF generation uses Browserless.io (hosted Chrome) instead of running
+# Chrome on this server — Render's free plan doesn't have enough RAM to
+# run headless Chrome reliably. Set BROWSERLESS_TOKEN below.
 #
 # CONFIGURED FOR THE FREE PLAN.
 #   ⚠️ Free plan = NO persistent disk: the SQLite database is WIPED whenever
@@ -12,37 +13,30 @@
 #   - Inspection records are NOT safe — download snapshots regularly from
 #     /backup?key=<ADMIN_KEY>  (key is in the service's Environment tab).
 #
-#   ⚠️ Docker builds take longer than the plain Node buildCommand did
-#   (installing Chromium + libraries via apt-get). This only happens at
-#   build time, not per-request, and Render caches Docker layers so
-#   rebuilds after the first one are faster.
-#
 # UPGRADE LATER (real data safety, ~$7/mo): set `plan: starter` and uncomment
 # the disk + DATA_DIR lines below, then push.
 services:
   - type: web
     name: msrtc-checklist
-    runtime: docker
-    dockerfilePath: ./Dockerfile
+    runtime: node
     plan: free
+    buildCommand: "npm install"
+    startCommand: node server/server.js
     healthCheckPath: /health
     envVars:
+      - key: BROWSERLESS_TOKEN
+        sync: false          # paste your Browserless.io API token in the dashboard
       - key: ADMIN_KEY
         generateValue: true  # enables GET /backup?key=... (value shown in dashboard)
-      # --- GOOGLE SHEET AS DURABLE DATABASE (set these 3 in the dashboard) ---
-      # With all three set, the server restores ALL sessions from the Sheet's
-      # Inspection_Sessions tab at boot and mirrors every write back to it —
-      # old data visible + new data survives free-plan restarts.
-      # See README "Google Sheet as the live database" for the setup steps.
       - key: SHEET_ID
-        sync: false          # value entered in dashboard: the spreadsheet id
+        sync: false
       - key: GOOGLE_SA_EMAIL
-        sync: false          # service-account client_email
+        sync: false
       - key: GOOGLE_SA_PRIVATE_KEY
-        sync: false          # service-account private_key (paste as-is)
-      # - key: DATA_DIR      # ← uncomment when upgrading to starter + disk
+        sync: false
+      # - key: DATA_DIR
       #   value: /data
-    # disk:                  # ← uncomment when upgrading to starter
+    # disk:
     #   name: msrtc-data
     #   mountPath: /data
     #   sizeGB: 1
