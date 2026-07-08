@@ -36,11 +36,12 @@ async function getBrowser() {
    browserPromise = puppeteer.launch({
       headless: true,
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: [
+     args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
+        '--no-zygote',        // avoids "Failed to adjust OOM score" permission errors in restrictive containers
         '--font-render-hinting=none'
       ]
     }).finally(() => { launching = false; });
