@@ -197,7 +197,7 @@ function buildReport(sessionId, autoPrint, opts) {
     'async function downloadPDF(){' +
       'var btn=document.querySelector(".dl-btn");' +
       'var orig=btn.textContent;' +
-      'btn.disabled=true;btn.textContent="⏳ तयार होत आहे... (30-40 सेकंद)";' +
+      'btn.disabled=true;btn.textContent="⏳ तयार होत आहे...";' +
       'try{' +
         'var resp=await fetch("' + REPORT_BASE + encodeURIComponent(sessionId) + '/download");' +
         'if(!resp.ok){throw new Error("Server error " + resp.status);}' +
@@ -211,7 +211,7 @@ function buildReport(sessionId, autoPrint, opts) {
         'btn.textContent="✅ डाउनलोड झाले!";' +
         'setTimeout(function(){btn.disabled=false;btn.textContent=orig;},2000);' +
       '}catch(err){' +
-        'alert("PDF डाउनलोड अयशस्वी / Download failed: " + err.message);' +
+        'alert("PDF डाउनलोड अयशस्वी: " + err.message);' +
         'btn.disabled=false;btn.textContent=orig;' +
       '}' +
     '}' +
