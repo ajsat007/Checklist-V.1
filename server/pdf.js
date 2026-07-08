@@ -1,58 +1,52 @@
+/* =====================================================================
+   pdf.js — PDF generation via Browserless.io (hosted headless Chrome).
+
+   WHY THIS EXISTS
+   ----------------
+   Running Chrome directly on Render's free plan (512MB RAM) kept crashing
+   silently no matter which Chrome build we used (bundled, system, or the
+   memory-optimized @sparticuz/chromium) — the container simply doesn't
+   have enough RAM to run any headless browser reliably alongside the
+   Node app.
+
+   Browserless.io runs Chrome on THEIR servers instead. We just send them
+   our report page's public URL; their Chrome renders it (with the
+   self-hosted Devanagari font loading normally) and sends back a PDF.
+   No Chrome, no Docker, no memory issues on our side at all.
+   ===================================================================== */
 'use strict';
 
-const puppeteer = require('puppeteer-core');
-const chromium = require('@sparticuz/chromium');
-
-let browserPromise = null;
-let launching = false;
-
-async function getBrowser() {
-  if (browserPromise) {
-    try {
-      const b = await browserPromise;
-      if (b && b.isConnected()) return b;
-    } catch (e) { /* fall through and relaunch */ }
-    browserPromise = null;
-  }
-  if (!launching) {
-    launching = true;
-    browserPromise = puppeteer.launch({
-      headless: true,
-      args: chromium.args,
-      executablePath: await chromium.executablePath()
-    }).finally(() => { launching = false; });
-  }
-  return browserPromise;
-}
-
 async function renderSessionPDF(sessionId, baseUrl) {
-  const browser = await getBrowser();
-  const page = await browser.newPage();
-  try {
-    await page.setViewport({ width: 900, height: 1400 });
-    const url = baseUrl + '/report/' + encodeURIComponent(sessionId) + '?pdf=1';
-    const resp = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    if (!resp || !resp.ok()) {
-      throw new Error('Report page failed to load (HTTP ' + (resp ? resp.status() : '?') + ')');
-    }
-    await page.evaluate(() => document.fonts && document.fonts.ready);
-    return await page.pdf({ printBackground: true, preferCSSPageSize: true, timeout: 30000 });
-  } finally {
-    await page.close().catch(() => {});
+  const token = process.env.BROWSERLESS_TOKEN;
+  if (!token) {
+    throw new Error('BROWSERLESS_TOKEN environment variable is not set');
   }
+
+  // Render sets RENDER_EXTERNAL_URL automatically to this app's public
+  // https:// address. Browserless needs a PUBLIC url (not localhost) so
+  // their Chrome (running elsewhere) can actually fetch it.
+  const publicBase = process.env.RENDER_EXTERNAL_URL || baseUrl;
+  const reportUrl = publicBase + '/report/' + encodeURIComponent(sessionId) + '?pdf=1';
+
+  const resp = await fetch('https://production-sfo.browserless.io/pdf?token=' + token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url: reportUrl,
+      options: { printBackground: true, preferCSSPageSize: true }
+    })
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error('Browserless PDF request failed (HTTP ' + resp.status + '): ' + text.slice(0, 300));
+  }
+
+  const arrayBuf = await resp.arrayBuffer();
+  return Buffer.from(arrayBuf);
 }
 
-function warmup() {
-  getBrowser().catch((e) => console.error('[pdf] warmup failed:', e.message));
-}
-
-async function closeBrowser() {
-  if (!browserPromise) return;
-  try {
-    const b = await browserPromise;
-    if (b) await b.close();
-  } catch (e) {}
-  browserPromise = null;
-}
+function warmup() { /* nothing to warm up — Browserless is always ready */ }
+async function closeBrowser() { /* nothing to close — no local browser anymore */ }
 
 module.exports = { renderSessionPDF, closeBrowser, warmup };
