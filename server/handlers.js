@@ -264,11 +264,15 @@ H.submitAllShifts = function (payload) {
   }
 
   const shifts = payload.shifts.filter(s => s && s.shiftName);
-  const total = (CHECKLIST_META[key].mode === 'shift') ? shifts.length : _unitsForKey(key).length;
-  const row = _ensureSessionRow(payload, STATUS.IN_PROCESS, total || shifts.length);
+  const isShiftMode = CHECKLIST_META[key].mode === 'shift';
+  const expectedTotal = isShiftMode ? (payload.totalShifts === 4 || payload.totalShifts === 6 ? payload.totalShifts : 6) : _unitsForKey(key).length;
+  if (isShiftMode && shifts.length < expectedTotal) {
+    return { ok: false, msg: 'सर्व ' + expectedTotal + ' पाळ्या भरणे आवश्यक आहे. फक्त ' + shifts.length + ' भरलेल्या आहेत.' };
+  }
+  const row = _ensureSessionRow(payload, STATUS.IN_PROCESS, expectedTotal);
   _mergeShifts(row.session_id, shifts);
   const merged = _parseJSON(_getSession(row.session_id).shifts_json, []);
-  const totalShifts = Math.max(row.total_shifts || 0, merged.length);
+  const totalShifts = Math.max(row.total_shifts || 0, merged.length, expectedTotal);
   db.prepare('UPDATE sessions SET completed_shifts=?, total_shifts=?, status=?, pdf_url=?, last_updated=? WHERE session_id=?')
     .run(merged.length, totalShifts, STATUS.COMPLETED, _pdfUrl(row.session_id), _istParts().full, row.session_id);
   _log('FINALIZE', row.session_id, { shifts: merged.length });

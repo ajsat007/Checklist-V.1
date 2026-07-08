@@ -1549,10 +1549,20 @@ function submitAllShifts() {
       for (var k=0;k<g.shifts.length;k++){ if (g.shifts[k].shiftName===units[s]) { found=true; break; } }
       if (!found) missing.push(units[s]);
     }
-    toast('⚠️ या पाळ्या रिकाम्या आहेत आणि वगळल्या जातील: '+missing.join(', ')+'\nपूर्ण करण्यासाठी पुन्हा दाबा.', 'error', 6000);
-    if (!G._confirmSkip) { G._confirmSkip = true; setTimeout(function(){ G._confirmSkip=false; }, 6000); return; }
+    toast('⚠️ सर्व पाळ्या भरणे आवश्यक आहे. रिकाम्या: '+missing.join(', '), 'error', 5000);
+    var firstMissingIdx = -1;
+    for (var s2=0;s2<units.length;s2++){
+      var f2=false;
+      for (var k2=0;k2<g.shifts.length;k2++){ if (g.shifts[k2].shiftName===units[s2]) { f2=true; break; } }
+      if (!f2){ firstMissingIdx=s2; break; }
+    }
+    if (firstMissingIdx>=0){
+      var b=document.getElementById('sbb_'+firstMissingIdx); if(b) b.style.display='block';
+      var fc=document.getElementById('qc_s'+firstMissingIdx+'_q0');
+      if(fc) fc.scrollIntoView({behavior:'smooth',block:'center'});
+    }
+    return;
   }
-  G._confirmSkip = false;
 
   _lockBtn('submitBtn','जतन होत आहे…');
   showLoad(true);
@@ -1568,7 +1578,8 @@ function submitAllShifts() {
     id:   document.getElementById('empid').value,
     date: document.getElementById('date').value,
     checklistKey: G.checklistKey,
-    shifts: g.shifts
+    shifts: g.shifts,
+    totalShifts: G.shiftCount || 0
   };
 
   gRun('submitAllShifts', function(resStr){
