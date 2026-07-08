@@ -41,7 +41,8 @@ async function getBrowser() {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
-        '--no-zygote',        // avoids "Failed to adjust OOM score" permission errors in restrictive containers
+        '--no-zygote',
+        '--single-process',
         '--font-render-hinting=none'
       ]
     }).finally(() => { launching = false; });
