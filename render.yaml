@@ -9,6 +9,14 @@
 #   - Inspection records are NOT safe — download snapshots regularly from
 #     /backup?key=<ADMIN_KEY>  (key is in the service's Environment tab).
 #
+#   ⚠️ PDF generation now uses headless Chromium (Puppeteer) so Devanagari
+#   text renders correctly. `npm install` will download a bundled Chromium
+#   (~250-300MB) during build — this is normal and only happens at build
+#   time, not per-request. Free plan has 512MB RAM; a single headless page
+#   render typically uses ~100-150MB, which fits, but if you see PDF
+#   downloads fail with "Target closed"/OOM errors under load, upgrade to
+#   `plan: starter` for more memory headroom.
+#
 # UPGRADE LATER (real data safety, ~$7/mo): set `plan: starter` and uncomment
 # the disk + DATA_DIR lines below, then push.
 services:
@@ -16,7 +24,7 @@ services:
     name: msrtc-checklist
     runtime: node
     plan: free
-    buildCommand: ""       # zero dependencies — nothing to build
+    buildCommand: "npm install"   # installs puppeteer + bundled Chromium
     startCommand: node server/server.js
     healthCheckPath: /health
     envVars:
