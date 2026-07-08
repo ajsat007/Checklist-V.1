@@ -10,7 +10,6 @@ const cfg = require('./checklist-config');
 const { CHECKLIST_META, CHECKLIST_TITLES, FALLBACK_QUESTIONS, PENALTIES, SIG_LABELS, SHIFTS, WEEKS, APP } = cfg;
 const { _getSession, _parseJSON } = require('./handlers');
 
-const REPORT_BASE = '/report/';
 const DEV_DIGITS = ['०','१','२','३','४','५','६','७','८','९'];
 function mn(n) { return String(n).replace(/[0-9]/g, d => DEV_DIGITS[+d]); }
 function esc(s) {
@@ -22,7 +21,7 @@ function ansCls(v) { return v === 'होय' ? 'yes' : (v === 'नाही' ? 
 function normUnit(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
 
 const CSS = `
-@page { size: A4; margin: 8mm; }
+@page { size: A4; margin: 6mm 8mm; }
 * { box-sizing: border-box; }
 body { font-family: 'Noto Sans Devanagari','Mangal',Arial,sans-serif; color:#111; margin:0; padding:10px; font-size:12px; }
 .sheet { border:1.5px solid #000; padding:8px 10px; max-width:1000px; margin:0 auto; }
@@ -48,9 +47,18 @@ table.grid th { background:#f0f2f5; text-align:center; font-weight:700; }
 .toolbar { text-align:center; margin:10px auto; max-width:1000px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
 .toolbar button { background:#0b3d6e; color:#fff; border:0; padding:12px 24px; border-radius:8px; font-size:15px; cursor:pointer; font-weight:600; }
 .toolbar button:active { transform:scale(0.97); }
-.toolbar .dl-btn { background:#0E9F6E; }
-.toolbar .dl-hint { width:100%; font-size:11px; color:#666; margin-top:2px; }
-@media print { .toolbar { display:none; } body { padding:0; } }
+.toolbar .dl-btn { background:#0E9F6E; font-size:16px; }
+.toolbar .dl-hint { width:100%; font-size:11px; color:#555; margin-top:2px; line-height:1.5; }
+@media print {
+  .toolbar { display:none !important; }
+  body { padding:0; margin:0; }
+  .sheet { border:none; padding:0; max-width:none; margin:0; box-shadow:none; }
+  .info td, .grid td, .grid th, .dand td, .dand th, .sigwrap td { font-size:9px !important; }
+  .grid { page-break-inside:auto; }
+  thead { display:table-header-group; }
+  tr { page-break-inside:avoid; }
+  .dand, .sigwrap { page-break-inside:avoid; }
+}
 `;
 
 function headerBlock(row) {
@@ -177,53 +185,27 @@ function buildBody(row) {
   return unitTable(row, units);
 }
 
-/* forPdf=true renders the BARE sheet (no toolbar, no print-trigger script).
-   This is the exact HTML that server/pdf.js loads into headless Chromium to
-   produce the actual downloadable PDF, so what you see in the browser tab
-   is pixel-identical to what ends up in the PDF. */
-function buildReport(sessionId, autoPrint, opts) {
-  const forPdf = !!(opts && opts.forPdf);
+function buildReport(sessionId, autoPrint) {
   const row = _getSession(sessionId);
   if (!row) {
     return '<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;padding:40px;text-align:center">' +
            '<h2>अहवाल आढळला नाही</h2><p>Report not found for session ' + esc(sessionId) + '.</p></body>';
   }
-  const toolbar = forPdf ? '' :
-    '<div class="toolbar">' +
-    '<button class="dl-btn" onclick="downloadPDF()">📥 PDF डाउनलोड करा / Download PDF</button>' +
-    '</div>';
-   const downloadScript = forPdf ? '' :
-    '<script>' +
-    'async function downloadPDF(){' +
-      'var btn=document.querySelector(".dl-btn");' +
-      'var orig=btn.textContent;' +
-      'btn.disabled=true;btn.textContent="⏳ तयार होत आहे...";' +
-      'try{' +
-        'var resp=await fetch("' + REPORT_BASE + encodeURIComponent(sessionId) + '/download");' +
-        'if(!resp.ok){throw new Error("Server error " + resp.status);}' +
-        'var blob=await resp.blob();' +
-        'var url=URL.createObjectURL(blob);' +
-        'var a=document.createElement("a");' +
-        'a.href=url;' +
-        'a.download="' + esc(row.token_id || 'Report') + '.pdf";' +
-        'document.body.appendChild(a);a.click();a.remove();' +
-        'setTimeout(function(){URL.revokeObjectURL(url);},15000);' +
-        'btn.textContent="✅ डाउनलोड झाले!";' +
-        'setTimeout(function(){btn.disabled=false;btn.textContent=orig;},2000);' +
-      '}catch(err){' +
-        'alert("PDF डाउनलोड अयशस्वी: " + err.message);' +
-        'btn.disabled=false;btn.textContent=orig;' +
-      '}' +
-    '}' +
-    '<\/script>';
-   const html =
+  const html =
     '<!doctype html><html lang="mr"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<title>' + esc(row.token_id || 'Report') + '</title>' +
-    '<link rel="stylesheet" href="/fonts/fonts.css">' +
+    '<link rel="preconnect" href="https://fonts.googleapis.com">' +
+    '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700;800&display=swap" rel="stylesheet">' +
     '<style>' + CSS + '</style>' +
     '</head><body>' +
-    toolbar +
+    '<div class="toolbar">' +
+    '<button class="dl-btn" onclick="window.print()">📥 PDF डाउनलोड करा</button>' +
+    '<button onclick="window.print()">🖨️ प्रिंट करा / Print</button>' +
+    '</div>' +
+    '<div style="text-align:center;max-width:1000px;margin:4px auto;color:#888;font-size:11px;line-height:1.5">' +
+    'PDF तयार करण्यासाठी वरील बटणावर क्लिक करा — मग <strong>गंतव्य स्थान = Save as PDF</strong> निवडा. ' +
+    'फॉन्ट अचूक येण्यासाठी ही पद्धत वापरली आहे.</div>' +
     '<div class="sheet" id="reportSheet">' +
       headerBlock(row) +
       buildBody(row) +
@@ -231,7 +213,6 @@ function buildReport(sessionId, autoPrint, opts) {
       sigBlock(row.checklist_key, row) +
       footerBlock(row) +
     '</div>' +
-    downloadScript +
     (autoPrint ? '<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},400);});<\/script>' : '') +
     '</body></html>';
   return html;
