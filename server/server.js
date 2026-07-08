@@ -176,17 +176,19 @@ const server = http.createServer(async (req, res) => {
    Sheet into SQLite BEFORE serving traffic (this is what makes history
    survive Render free-plan restarts). Without env vars, start as before. */
 (async () => {
-  if (sheetsEnabled()) {
+ if (sheetsEnabled()) {
     try {
       const t0 = Date.now();
-      const r = await loadFromSheet(db);
+      const timeout = new Promise((_, rej) =>
+        setTimeout(() => rej(new Error('Sheet restore timed out after 20s')), 20000));
+      const r = await Promise.race([loadFromSheet(db), timeout]);
       console.log('[boot] restored %d sessions from Google Sheet in %ds',
         r.loaded, Math.round((Date.now() - t0) / 1000));
     } catch (e) {
-      console.error('[boot] Sheet restore FAILED (continuing with local data):', e.message);
+      console.error('[boot] Sheet restore FAILED or timed out (continuing with local data):', e.message);
     }
   } else {
-    console.log('[boot] Sheet sync disabled (SHEET_ID / GOOGLE_SA_* env vars not set)');
+   console.log('[boot] Sheet sync disabled (SHEET_ID / GOOGLE_SA_* env vars not set)');
   }
   server.listen(PORT, () => {
     console.log('MSRTC Checklist server running → http://localhost:' + PORT);
