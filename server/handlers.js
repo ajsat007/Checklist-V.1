@@ -382,6 +382,25 @@ H.deleteBusEntry = function (sessionId, busIndex, requestingEmpId) {
   return { ok: true, remaining: buses.length, msg: '🗑 बस ' + (removed.busNumber || '') + ' हटवली.' };
 };
 
+H.fixPartialShiftSessions = function () {
+  const shiftKeys = [];
+  for (const k in CHECKLIST_META) { if (CHECKLIST_META[k].mode === 'shift') shiftKeys.push(k); }
+  const ph = shiftKeys.map(() => '?').join(',');
+  const rows = db.prepare(
+    `SELECT * FROM sessions WHERE status='Completed' AND checklist_key IN (${ph}) AND total_shifts IN (1,2,3,5)`
+  ).all(...shiftKeys);
+  if (!rows.length) return { ok: true, fixed: 0, msg: 'कोणतेही अपूर्ण सत्र आढळले नाही.' };
+  const updated = [];
+  for (const row of rows) {
+    db.prepare('UPDATE sessions SET status=?, last_updated=? WHERE session_id=?')
+      .run('In Process', _istParts().full, row.session_id);
+    mirrorUpdate(_getSession(row.session_id));
+    updated.push({ id: row.session_id, district: row.district, station: row.station, shifts: row.completed_shifts + '/' + row.total_shifts });
+  }
+  _log('FIX_PARTIAL_SHIFTS', 'BATCH', { count: updated.length });
+  return { ok: true, fixed: updated.length, sessions: updated, msg: updated.length + ' सत्रे "In Process" मध्ये बदलली.' };
+};
+
 function _sessionIdentity(row) {
   return {
     sessionId: row.session_id, tokenId: row.token_id,

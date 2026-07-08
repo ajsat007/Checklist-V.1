@@ -33,7 +33,8 @@ const ALLOWED = new Set([
   'deleteSession', 'deleteBusEntry', 'getSessionForEdit', 'resumeSession', 'listIncompleteSessions',
   'getMyReports', 'getSupervisorReports', 'getMyReportsPaged', 'getSessionDetail', 'getReportFullDetail',
   'generateSessionPdf', 'generatePdfNow', 'regeneratePDFForSession', 'getSessionPdf',
-  'searchReports', 'searchPastInspections', 'peekContinuationSession'
+  'searchReports', 'searchPastInspections', 'peekContinuationSession',
+  'fixPartialShiftSessions'
 ]);
 
 const MIME = {
