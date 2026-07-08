@@ -86,7 +86,13 @@ function mirrorDelete(sessionId) {
   _enqueue(async () => {
     let rn = rowMap.get(sessionId);
     if (!rn) rn = await _resolveRow(sessionId);
-    if (rn) { await sheets.clearSessionRow(rn); rowMap.delete(sessionId); }
+    if (rn) {
+      await sheets.deleteSessionRow(rn);
+      // Physical row deletion shifts all subsequent rows up by 1,
+      // so rebuild the map to keep row pointers accurate.
+      rowMap.clear();
+      await _resolveRow();
+    }
   });
 }
 

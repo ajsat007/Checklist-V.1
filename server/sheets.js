@@ -135,13 +135,46 @@ async function updateSessionRow(rowNumber, rowArr) {
   await _api('PUT', '/values/' + range + '?valueInputOption=RAW', { values: [rowArr] });
 }
 
-// Clear a row's values (DELETE — keeps row numbering stable for other rows).
-async function clearSessionRow(rowNumber) {
-  const range = encodeURIComponent(TAB + '!A' + rowNumber + ':T' + rowNumber);
-  await _api('POST', '/values/' + range + ':clear', {});
+// Cache the sheet ID (numeric gid) for deleteDimension requests.
+let _sheetGid = null;
+
+async function _getSheetGid() {
+  if (_sheetGid !== null) return _sheetGid;
+  const data = await _api('GET', '?fields=sheets.properties');
+  const sheets = data.sheets || [];
+  for (const s of sheets) {
+    if (s.properties && s.properties.title === TAB) {
+      _sheetGid = s.properties.sheetId;
+      return _sheetGid;
+    }
+  }
+  // Fallback: assume first sheet
+  if (sheets.length) {
+    _sheetGid = sheets[0].properties.sheetId;
+    return _sheetGid;
+  }
+  throw new Error('Sheet "' + TAB + '" not found and no fallback available.');
+}
+
+// Physically DELETE a row so no blank row remains.
+// All rows below shift up by one, so callers must rebuild the row map after this.
+async function deleteSessionRow(rowNumber) {
+  const gid = await _getSheetGid();
+  await _api('POST', ':batchUpdate', {
+    requests: [{
+      deleteDimension: {
+        range: {
+          sheetId: gid,
+          dimension: 'ROWS',
+          startIndex: rowNumber - 1,   // 0-based; row 2 in sheet = index 1
+          endIndex: rowNumber          // exclusive end
+        }
+      }
+    }]
+  });
 }
 
 module.exports = {
   sheetsEnabled, COLS, TAB,
-  readSessionsChunked, readIdColumn, appendSession, updateSessionRow, clearSessionRow
+  readSessionsChunked, readIdColumn, appendSession, updateSessionRow, deleteSessionRow
 };
