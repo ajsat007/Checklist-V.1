@@ -23,6 +23,20 @@ function normUnit(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowe
 const CSS = `
 @page { size: A4; margin: 6mm 8mm; }
 * { box-sizing: border-box; }
+@font-face {
+  font-family: 'Noto Sans Devanagari';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/NotoSansDevanagari-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Noto Sans Devanagari';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('/fonts/NotoSansDevanagari-Bold.ttf') format('truetype');
+}
 body { font-family: 'Noto Sans Devanagari','Mangal',Arial,sans-serif; color:#111; margin:0; padding:10px; font-size:12px; }
 .sheet { border:1.5px solid #000; padding:8px 10px; max-width:1000px; margin:0 auto; }
 .org { text-align:center; font-weight:800; font-size:15px; margin-bottom:2px; }
@@ -217,8 +231,6 @@ function buildReport(sessionId, autoPrint, options) {
     '<!doctype html><html lang="mr"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<title>' + esc(row.token_id || 'Report') + '</title>' +
-    '<link rel="preconnect" href="https://fonts.googleapis.com">' +
-    '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700;800&display=swap" rel="stylesheet">' +
     '<style>' + CSS + '</style>' +
     '</head><body>' +
     toolbarHtml +
