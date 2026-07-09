@@ -28,9 +28,15 @@ async function call(fn, ...args) {
 
   console.log('— shift checklist (bs) —');
   const SID = 'SES-TEST-SHIFT-' + Date.now();
+  const answersA = { 'फलाट स्वच्छता': 'होय', 'जिना': 'नाही', 'बसस्थानक झाडणे, पुसणे': 'होय', 'वाहतूक नियंत्रक कक्ष': 'होय', 'मजला (झाडलोट)': 'होय', 'मजला (मॉपिंग)': 'होय' };
+  const answersB = { 'फलाट स्वच्छता': 'होय', 'जिना': 'होय', 'बसस्थानक झाडणे, पुसणे': 'होय', 'वाहतूक नियंत्रक कक्ष': 'होय', 'मजला (झाडलोट)': 'होय', 'मजला (मॉपिंग)': 'होय' };
   const shifts = [
-    { shiftName: 'पहिली पाळी(Shift)', answers: { 'फलाट स्वच्छता': 'होय', 'जिना': 'नाही' }, remarks: { 'जिना': 'दुरुस्ती हवी' } },
-    { shiftName: 'दुसरी पाळी(Shift)', answers: { 'फलाट स्वच्छता': 'होय', 'जिना': 'होय' }, remarks: {} }
+    { shiftName: 'पहिली पाळी(Shift)', answers: answersA, remarks: { 'जिना': 'दुरुस्ती हवी' } },
+    { shiftName: 'दुसरी पाळी(Shift)', answers: answersB, remarks: {} },
+    { shiftName: 'तिसरी पाळी(Shift)', answers: answersB, remarks: {} },
+    { shiftName: 'चौथी पाळी(Shift)', answers: answersB, remarks: {} },
+    { shiftName: 'पाचवी पाळी(Shift)', answers: answersB, remarks: {} },
+    { shiftName: 'सहावी पाळी(Shift)', answers: answersB, remarks: {} }
   ];
   const sub = await call('submitAllShifts', {
     sessionId: SID, tokenId: '', dist: 'अमरावती', stn: 'अमरावती',

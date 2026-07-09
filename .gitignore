@@ -6,3 +6,7 @@ node_modules/
 .claude/
 # temp exports from the old Google Sheet (huge)
 _*.csv
+
+# separate Google Apps Script repos — not part of the Node.js project
+material-status/
+dashboard-checklist/
