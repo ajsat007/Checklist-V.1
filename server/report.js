@@ -209,34 +209,54 @@ function buildReport(sessionId, autoPrint, options) {
   const forPdf = options && options.forPdf;
 
   // Count validation for bus sessions
-  if (row.checklist_key === 'bw' || (CHECKLIST_META[row.checklist_key] || {}).mode === 'bus') {
+  if (!forPdf && (row.checklist_key === 'bw' || (CHECKLIST_META[row.checklist_key] || {}).mode === 'bus')) {
     const buses = _parseJSON(row.buses_json, []);
     if (row.total_buses !== buses.length) {
       console.warn('[pdf] BUS COUNT MISMATCH! session=' + row.session_id + ' total_buses_col=' + row.total_buses + ' actual_json=' + buses.length);
     }
-    console.log('[pdf] buildReport session=' + row.session_id + ' mode=bus buses_json=' + buses.length + ' total_buses_field=' + row.total_buses);
   }
 
   const toolbarHtml = forPdf ? '' :
-    '<div class="toolbar">' +
-    '<button class="dl-btn" onclick="window.print()">📥 PDF म्हणून जतन करा</button>' +
+    '<div class="toolbar" style="flex-direction:column;align-items:center">' +
+    '<button class="dl-btn" id="pdfDlBtn" style="font-size:18px;padding:14px 32px;width:100%;max-width:400px">📥 PDF डाउनलोड करा (एक क्लिक)</button>' +
+    '<button onclick="window.print()" style="background:transparent;color:#0b3d6e;border:1px solid #0b3d6e;font-size:13px;padding:8px 16px">🖨️ प्रिंट / Print वापरून PDF</button>' +
     '</div>' +
-    '<div class="dl-hint" style="text-align:center;max-width:1000px;margin:4px auto;color:#888;font-size:11px;line-height:1.5">' +
-    'वरील बटणावर क्लिक करा — <a href="#" onclick="document.getElementById(\'guideModal\').style.display=\'flex\';return false" style="color:#0b3d6e">मोबाईलमध्ये PDF कसे डाउनलोड करायचे?</a></div>' +
+    '<div class="dl-hint">PDF आपोआप डाउनलोड होईल. <a href="#" onclick="document.getElementById(\'guideModal\').style.display=\'flex\';return false" style="color:#0b3d6e">मदत / मोबाईल मार्गदर्शन</a></div>' +
     '<div class="guide-overlay" id="guideModal">' +
       '<div class="guide-card">' +
         '<h3>📱 PDF डाउनलोड कसे करावे</h3>' +
-        '<p>मोबाईल / संगणकावर PDF जतन करण्यासाठी खालील पायऱ्या फॉलो करा:</p>' +
-        '<div class="guide-step"><div class="num">1</div><div class="txt"><strong>📥 PDF म्हणून जतन करा</strong> या बटणावर टॅप करा. उघडलेल्या मेनूमध्ये <strong>Print</strong> किंवा <strong>प्रिंट</strong> वर टॅप करा.</div></div>' +
-        '<div class="guide-step"><div class="num">2</div><div class="txt">प्रिंट डायलॉग उघडल्यावर वरील बाजूला <strong>गंतव्य स्थान (Destination)</strong> मध्ये <strong>Save as PDF</strong> किंवा <strong>PDF म्हणून जतन करा</strong> निवडा.</div></div>' +
-        '<div class="guide-step"><div class="num">3</div><div class="txt">खाली <strong>PDF</strong> बटणावर टॅप करा (अँड्रॉइड) किंवा <strong>Save</strong> वर टॅप करा (iOS). हा PDF तुमच्या फोनमध्ये सेव्ह होईल.</div></div>' +
+        '<p style="background:#e8f5e9;padding:8px 12px;border-radius:8px;font-size:13px">✅ <strong>नवीन:</strong> आता <strong>"PDF डाउनलोड करा (एक क्लिक)"</strong> बटणावर टॅप केल्यास PDF थेट डाउनलोड होईल — कोणतेही प्रिंट सेटिंग बदलण्याची गरज नाही!</p>' +
+        '<p>जर वरील बटण काम करत नसेल तर खालील पद्धत वापरा:</p>' +
+        '<div class="guide-step"><div class="num">1</div><div class="txt"><strong>"प्रिंट / Print वापरून PDF"</strong> या बटणावर टॅप करा.</div></div>' +
+        '<div class="guide-step"><div class="num">2</div><div class="txt">प्रिंट डायलॉगमध्ये <strong>गंतव्य स्थान = Save as PDF</strong> निवडा.</div></div>' +
+        '<div class="guide-step"><div class="num">3</div><div class="txt"><strong>PDF</strong> बटणावर टॅप करा (अँड्रॉइड) किंवा <strong>Save</strong> वर टॅप करा (iOS).</div></div>' +
         '<p style="margin-top:12px;font-size:12px;color:#666;background:#fff3cd;padding:8px 12px;border-radius:8px">' +
-          '💡 <strong>महत्त्वाचे:</strong> सर्व डेटा PDF मध्ये येण्यासाठी प्रिंट डायलॉगमध्ये <strong>सर्व पाने (All Pages)</strong> निवडल्याची खात्री करा.' +
+          '💡 <strong>महत्त्वाचे:</strong> प्रिंट डायलॉगमध्ये <strong>सर्व पाने (All Pages)</strong> निवडल्याची खात्री करा.' +
         '</p>' +
         '<button class="guide-close" onclick="document.getElementById(\'guideModal\').style.display=\'none\'">👍 समजले</button>' +
         '<div class="guide-hint" onclick="document.getElementById(\'guideModal\').style.display=\'none\'">नंतर वाचेन</div>' +
       '</div>' +
-    '</div>';
+    '</div>' +
+    '<script>' +
+    'document.getElementById("pdfDlBtn").onclick=function(){' +
+      'var btn=this;btn.disabled=true;btn.textContent="⏳ PDF तयार होत आहे...";' +
+      'fetch("/report/' + encodeURIComponent(sessionId) + '/pdf").then(function(r){' +
+        'if(!r.ok){return r.text().then(function(t){throw new Error(t)});}' +
+        'return r.blob();' +
+      '}).then(function(blob){' +
+        'var url=URL.createObjectURL(blob);' +
+        'var a=document.createElement("a");a.href=url;a.download="' + esc((row && row.token_id) || 'report') + '.pdf";' +
+        'document.body.appendChild(a);a.click();a.remove();' +
+        'setTimeout(function(){URL.revokeObjectURL(url);},10000);' +
+        'btn.textContent="✅ PDF डाउनलोड झाले!";' +
+        'setTimeout(function(){btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा (एक क्लिक)";},3000);' +
+      '}).catch(function(e){' +
+        'console.error("PDF_DL:",e);' +
+        'btn.textContent="❌ त्रुटी - प्रिंट वापरा";btn.style.background="#b91c1c";' +
+        'setTimeout(function(){btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा (एक क्लिक)";btn.style.background="";},5000);' +
+      '});' +
+    '};' +
+    '<\/script>';
 
   const html =
     '<!doctype html><html lang="mr"><head><meta charset="utf-8">' +

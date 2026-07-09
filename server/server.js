@@ -2,7 +2,7 @@
    server.js — the whole backend (Node >= 22.13).
      POST /exec              { fn, args } -> dispatch to a whitelisted handler
      GET  /report/:id        printable Marathi inspection report
-                             (use Print → Save as PDF)
+     GET  /report/:id/pdf    one-click PDF download
      GET  /*                 static SPA files from ../public
    Run:  node server/server.js     (or: npm start)
    ===================================================================== */
@@ -15,6 +15,7 @@ const fs   = require('fs');
 const seed = require('./seed');
 const { H } = require('./handlers');
 const { buildReport } = require('./report');
+const { generatePdf } = require('./pdf-gen');
 const db = require('./db');
 const { loadFromSheet } = require('./sheet-sync');
 const { sheetsEnabled } = require('./sheets');
@@ -109,6 +110,27 @@ const server = http.createServer(async (req, res) => {
     try {
       const q = url.indexOf('?');
       const rawId = url.slice('/report/'.length, q === -1 ? undefined : q);
+
+      // Check for /report/:id/pdf route (one-click PDF download)
+      if (rawId.endsWith('/pdf')) {
+        const sessionId = rawId.slice(0, -4); // remove /pdf suffix
+        try {
+          const pdfBuf = await generatePdf(decodeURIComponent(sessionId));
+          const row = require('./handlers')._getSession(sessionId);
+          const safeName = ((row && row.token_id) || sessionId).replace(/[^A-Za-z0-9_\-]/g, '_') + '.pdf';
+          res.writeHead(200, {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment; filename="' + safeName + '"',
+            'Content-Length': pdfBuf.length,
+            'Cache-Control': 'no-store'
+          });
+          return res.end(pdfBuf);
+        } catch (err) {
+          console.error('[pdf-dl]', err);
+          return send(res, 500, JSON.stringify({ ok: false, msg: 'PDF generation failed: ' + err.message }), 'application/json');
+        }
+      }
+
       let id;
       try { id = decodeURIComponent(rawId); } catch (e) { id = rawId; }
       const qs = q === -1 ? '' : url.slice(q);
