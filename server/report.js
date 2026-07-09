@@ -48,8 +48,19 @@ table.grid th { background:#f0f2f5; text-align:center; font-weight:700; }
 .toolbar button { background:#0b3d6e; color:#fff; border:0; padding:12px 24px; border-radius:8px; font-size:15px; cursor:pointer; font-weight:600; }
 .toolbar button:active { transform:scale(0.97); }
 .toolbar .dl-btn { background:#0E9F6E; font-size:16px; }
+.guide-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; justify-content:center; align-items:center; padding:20px; }
+.guide-card { background:#fff; border-radius:14px; max-width:420px; width:100%; padding:28px 24px; box-shadow:0 8px 40px rgba(0,0,0,0.3); position:relative; max-height:90vh; overflow-y:auto; }
+.guide-card h3 { margin:0 0 6px; font-size:17px; color:#0b3d6e; text-align:center; }
+.guide-card p { margin:4px 0 14px; font-size:13px; color:#555; text-align:center; }
+.guide-step { display:flex; align-items:flex-start; gap:12px; margin-bottom:14px; padding:10px 12px; background:#f7f9fc; border-radius:10px; }
+.guide-step .num { background:#0b3d6e; color:#fff; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; flex-shrink:0; margin-top:2px; }
+.guide-step .txt { font-size:13px; color:#222; line-height:1.5; }
+.guide-step .txt strong { color:#0b3d6e; }
+.guide-close { display:block; width:100%; padding:12px; background:#0b3d6e; color:#fff; border:0; border-radius:8px; font-size:15px; font-weight:600; cursor:pointer; margin-top:4px; }
+.guide-close:hover { background:#0a2f52; }
+.guide-hint { font-size:10px; color:#aaa; text-align:center; margin:10px 0 0; cursor:pointer; text-decoration:underline; }
 @media print {
-  .toolbar { display:none !important; }
+  .toolbar, .guide-overlay, #printGuide { display:none !important; }
   body { padding:0; margin:0; }
   .sheet { border:none; padding:0; max-width:none; margin:0; box-shadow:none; }
   .info td, .grid td, .grid th, .dand td, .dand th, .sigwrap td { font-size:9px !important; }
@@ -57,6 +68,7 @@ table.grid th { background:#f0f2f5; text-align:center; font-weight:700; }
   thead { display:table-header-group; }
   tr { page-break-inside:avoid; }
   .dand, .sigwrap { page-break-inside:avoid; }
+  [style*="overflow-x:auto"] { overflow:visible !important; }
 }
 `;
 
@@ -185,8 +197,21 @@ function buildReport(sessionId, autoPrint, options) {
     '<button class="dl-btn" onclick="window.print()">📥 PDF म्हणून जतन करा</button>' +
     '</div>' +
     '<div style="text-align:center;max-width:1000px;margin:4px auto;color:#888;font-size:11px;line-height:1.5">' +
-    'PDF तयार करण्यासाठी वरील बटणावर क्लिक करा — उघडलेल्या प्रिंट डायलॉगमध्ये <strong>गंतव्य स्थान = Save as PDF</strong> निवडा व जतन करा. ' +
-    '(फॉन्ट अचूक येण्यासाठी ही पद्धत वापरली आहे.)</div>';
+    'वरील बटणावर क्लिक करा — <a href="#" onclick="document.getElementById(\'guideModal\').style.display=\'flex\';return false" style="color:#0b3d6e">मोबाईलमध्ये PDF कसे डाउनलोड करायचे?</a></div>' +
+    '<div class="guide-overlay" id="guideModal">' +
+      '<div class="guide-card">' +
+        '<h3>📱 PDF डाउनलोड कसे करावे</h3>' +
+        '<p>मोबाईल / संगणकावर PDF जतन करण्यासाठी खालील पायऱ्या फॉलो करा:</p>' +
+        '<div class="guide-step"><div class="num">1</div><div class="txt"><strong>📥 PDF म्हणून जतन करा</strong> या बटणावर टॅप करा. उघडलेल्या मेनूमध्ये <strong>Print</strong> किंवा <strong>प्रिंट</strong> वर टॅप करा.</div></div>' +
+        '<div class="guide-step"><div class="num">2</div><div class="txt">प्रिंट डायलॉग उघडल्यावर वरील बाजूला <strong>गंतव्य स्थान (Destination)</strong> मध्ये <strong>Save as PDF</strong> किंवा <strong>PDF म्हणून जतन करा</strong> निवडा.</div></div>' +
+        '<div class="guide-step"><div class="num">3</div><div class="txt">खाली <strong>PDF</strong> बटणावर टॅप करा (अँड्रॉइड) किंवा <strong>Save</strong> वर टॅप करा (iOS). हा PDF तुमच्या फोनमध्ये सेव्ह होईल.</div></div>' +
+        '<p style="margin-top:12px;font-size:12px;color:#666;background:#fff3cd;padding:8px 12px;border-radius:8px">' +
+          '💡 <strong>महत्त्वाचे:</strong> सर्व डेटा PDF मध्ये येण्यासाठी प्रिंट डायलॉगमध्ये <strong>सर्व पाने (All Pages)</strong> निवडल्याची खात्री करा.' +
+        '</p>' +
+        '<button class="guide-close" onclick="document.getElementById(\'guideModal\').style.display=\'none\'">👍 समजले</button>' +
+        '<div class="guide-hint" onclick="document.getElementById(\'guideModal\').style.display=\'none\'">नंतर वाचेन</div>' +
+      '</div>' +
+    '</div>';
 
   const html =
     '<!doctype html><html lang="mr"><head><meta charset="utf-8">' +
@@ -204,6 +229,17 @@ function buildReport(sessionId, autoPrint, options) {
       sigBlock(row.checklist_key, row) +
       footerBlock(row) +
     '</div>' +
+    '<script>' +
+    // Auto-show guide for mobile users on first visit
+    'if(/Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)&&!localStorage.getItem("pdfGuideShown")){' +
+      'window.addEventListener("load",function(){' +
+        'setTimeout(function(){' +
+          'var g=document.getElementById("guideModal");if(g)g.style.display="flex";' +
+          'localStorage.setItem("pdfGuideShown","1");' +
+        '},800);' +
+      '});' +
+    '}' +
+    '<\/script>' +
     (autoPrint ? '<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},400);});<\/script>' : '') +
     '</body></html>';
   return html;
