@@ -13,7 +13,10 @@ const { _getSession, _parseJSON } = require('./handlers');
 
 /* ---- embedded font base64 (TTF, read once at boot) ---- */
 const _FONT_DIR = path.resolve(__dirname, '..', 'public', 'fonts');
-function _b64(name) { return fs.readFileSync(path.join(_FONT_DIR, name)).toString('base64'); }
+function _b64(name) {
+  try { return fs.readFileSync(path.join(_FONT_DIR, name)).toString('base64'); }
+  catch (e) { console.error('[report] font load failed:', name, e.message); return ''; }
+}
 const FONT_REGULAR = _b64('NotoSansDevanagari-Regular.ttf');
 const FONT_BOLD = _b64('NotoSansDevanagari-Bold.ttf');
 
@@ -247,7 +250,7 @@ function _pdfShiftTable(row) {
     present.forEach(u => {
       const a = (u.answers || {})[q] || '';
       const rm = (u.remarks || {})[q];
-      if (rm) remarks.push(mn(i + 1) + ': ' + rm);
+      if (rm && remarks.indexOf(mn(i + 1) + ': ' + rm) === -1) remarks.push(mn(i + 1) + ': ' + rm);
       cells.push(_ansCell(a));
     });
     cells.push(_pc(remarks.join(', '), { fontSize: 7, color: '#b91c1c', italics: true }));
@@ -294,7 +297,7 @@ function _pdfBusTable(row) {
     questions.forEach((q, i) => {
       const a = (b.answers || {})[q] || '';
       const rm = (b.remarks || {})[q];
-      if (rm) remarks.push(mn(i + 1) + ': ' + rm);
+      if (rm && remarks.indexOf(mn(i + 1) + ': ' + rm) === -1) remarks.push(mn(i + 1) + ': ' + rm);
       cells.push(_ansCell(a));
     });
     cells.push(_pc(remarks.join(', '), { fontSize: 7, color: '#b91c1c', italics: true }));

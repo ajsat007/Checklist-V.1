@@ -53,6 +53,7 @@ function send(res, status, body, type) {
   res.writeHead(status, { 'Content-Type': type || 'application/json; charset=utf-8' });
   res.end(body);
 }
+function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -69,7 +70,8 @@ function readBody(req) {
 }
 
 function serveStatic(res, urlPath) {
-  let rel = decodeURIComponent(urlPath.split('?')[0]);
+  let rel;
+  try { rel = decodeURIComponent(urlPath.split('?')[0]); } catch (e) { rel = urlPath.split('?')[0]; }
   if (rel === '/' || rel === '') rel = '/index.html';
   // prevent path traversal: resolve inside PUBLIC_DIR only
   const abs = path.normalize(path.join(PUBLIC_DIR, rel));
@@ -104,22 +106,32 @@ const server = http.createServer(async (req, res) => {
 
   // ---- GET /report/:id : printable report (with client-side pdfmake PDF) ----
   if (req.method === 'GET' && url.startsWith('/report/')) {
-    const q = url.indexOf('?');
-    const id = decodeURIComponent(url.slice('/report/'.length, q === -1 ? undefined : q));
-    const qs = q === -1 ? '' : url.slice(q);
-    const autoPrint = qs.indexOf('print=1') !== -1;
-    const forPdf = qs.indexOf('pdf=1') !== -1;
-    return send(res, 200, buildReport(id, autoPrint, { forPdf }), 'text/html; charset=utf-8');
+    try {
+      const q = url.indexOf('?');
+      const rawId = url.slice('/report/'.length, q === -1 ? undefined : q);
+      let id;
+      try { id = decodeURIComponent(rawId); } catch (e) { id = rawId; }
+      const qs = q === -1 ? '' : url.slice(q);
+      const autoPrint = qs.indexOf('print=1') !== -1;
+      const forPdf = qs.indexOf('pdf=1') !== -1;
+      return send(res, 200, buildReport(id, autoPrint, { forPdf }), 'text/html; charset=utf-8');
+    } catch (err) {
+      console.error('[report]', err);
+      return send(res, 500, '<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;padding:40px;text-align:center"><h2>अहवाल तयार करताना त्रुटी</h2><p>Report error: ' + escapeHtml(String(err.message || err)) + '</p></body>', 'text/html; charset=utf-8');
+    }
   }
 
   if (req.method === 'GET' && url.split('?')[0] === '/health') {
-    return send(res, 200, JSON.stringify({ ok: true }));
+    try { db.prepare('SELECT 1').get(); return send(res, 200, JSON.stringify({ ok: true, db: 'ok' })); }
+    catch (e) { return send(res, 500, JSON.stringify({ ok: false, db: 'error', msg: e.message })); }
   }
 
   // ---- GET /backup?key=ADMIN_KEY : download a consistent DB snapshot ----
   if (req.method === 'GET' && url.split('?')[0] === '/backup') {
     const adminKey = process.env.ADMIN_KEY || '';
-    const givenKey = (url.split('key=')[1] || '').split('&')[0];
+    const qIdx = url.indexOf('?');
+    const params = qIdx >= 0 ? new URLSearchParams(url.slice(qIdx + 1)) : new URLSearchParams();
+    const givenKey = params.get('key') || '';
     if (!adminKey) return send(res, 404, 'Backups disabled (set ADMIN_KEY).', 'text/plain');
     if (givenKey !== adminKey) return send(res, 403, 'Forbidden', 'text/plain');
     try {
@@ -144,6 +156,15 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET') return serveStatic(res, url);
 
   send(res, 405, 'Method not allowed', 'text/plain');
+});
+
+// Server-level error handler (prevents crash on EADDRINUSE, etc.)
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error('[fatal] Port ' + PORT + ' is already in use.');
+    process.exit(1);
+  }
+  console.error('[fatal] Server error:', err);
 });
 
 /* Boot: when Google Sheet env vars are set, restore ALL sessions from the
