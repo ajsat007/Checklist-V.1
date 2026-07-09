@@ -496,7 +496,12 @@ function buildReport(sessionId, autoPrint, options) {
     '</div>' +
     '<script src="/js/pdfmake.min.js"><\/script>' +
     '<script>' +
-    'pdfMake.fonts={' +
+    'var _PDF_DD=' + ddJson + ';' +
+    'var _PDF_VFS={' +
+      "'NotoSansDevanagari-Regular.ttf':'" + FONT_REGULAR + "'," +
+      "'NotoSansDevanagari-Bold.ttf':'" + FONT_BOLD + "'" +
+    '};' +
+    'var _PDF_FONTS={' +
       'NotoSansDevanagari:{' +
         "normal:'NotoSansDevanagari-Regular.ttf'," +
         "bold:'NotoSansDevanagari-Bold.ttf'," +
@@ -504,15 +509,11 @@ function buildReport(sessionId, autoPrint, options) {
         "bolditalics:'NotoSansDevanagari-Bold.ttf'" +
       '}' +
     '};' +
-    'pdfMake.vfs={' +
-      "'NotoSansDevanagari-Regular.ttf':'" + FONT_REGULAR + "'," +
-      "'NotoSansDevanagari-Bold.ttf':'" + FONT_BOLD + "'" +
-    '};' +
-    'var _PDF_DD=' + ddJson + ';' +
     'document.getElementById("pdfDlBtn").onclick=function(){' +
       'var btn=this;btn.disabled=true;btn.textContent="⏳ PDF तयार होत आहे...";' +
       'try{' +
-        'pdfMake.createPdf(_PDF_DD).download("' + tokenSafe + '.pdf");' +
+        'var pdfDoc = new pdfMake(_PDF_DD, null, _PDF_FONTS, _PDF_VFS);' +
+        'pdfDoc.createPdf().download("' + tokenSafe + '.pdf");' +
         'setTimeout(function(){btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा";},2500);' +
       '}catch(e){' +
         'alert("PDF त्रुटी: "+e.message);' +
