@@ -121,7 +121,7 @@ function _ensureSessionRow(payload, defaultStatus, defaultTotalShifts) {
   const createdDate = _isoToDDMM(iso) || nowT.date;
   const createdTime = createdDate + ' ' + nowT.time;
   const key = _s(payload.checklistKey);
-  const label = payload.checklist || (CHECKLIST_META[key] || {}).label || key;
+  const label = payload.checklist || CHECKLIST_TITLES[key] || (CHECKLIST_META[key] || {}).label || key;
   const tokenId = _nextToken(payload.dist, payload.stn);
 
   db.prepare(`INSERT INTO sessions
@@ -594,6 +594,37 @@ H.peekContinuationSession = function (station, checklistKey, empId) {
     .get(_s(station), _s(checklistKey), _s(empId), STATUS.COMPLETED);
   if (!row) return { found: false };
   return { found: true, sessionId: row.session_id, tokenId: row.token_id };
+};
+
+/* Fix all existing checklist_type values to match CHECKLIST_TITLES.
+   Call after deploy to correct old data in DB and Sheet. */
+H.fixChecklistTypes = function (syncSheet) {
+  const fixes = [];
+  for (const key in CHECKLIST_TITLES) {
+    const correct = CHECKLIST_TITLES[key];
+    const rows = db.prepare('SELECT DISTINCT checklist_type FROM sessions WHERE checklist_key=? AND checklist_type!=?').all(key, correct);
+    rows.forEach(r => {
+      const count = db.prepare("UPDATE sessions SET checklist_type=? WHERE checklist_key=? AND checklist_type=?").run(correct, key, r.checklist_type).changes;
+      if (count > 0) fixes.push({ from: r.checklist_type, to: correct, key, count });
+    });
+  }
+  // Also fix the 1 wr row that has gh's title
+  const wrFix = db.prepare("UPDATE sessions SET checklist_type=? WHERE checklist_key='wr' AND checklist_type=?").run('प्रसाधनगृह स्वच्छता दैनंदिन तपासणी', 'विश्रांतीगृह स्वच्छता दैनंदिन तपासणी');
+  if (wrFix.changes > 0) fixes.push({ from: 'विश्रांतीगृह स्वच्छता दैनंदिन तपासणी', to: 'प्रसाधनगृह स्वच्छता दैनंदिन तपासणी', key: 'wr', count: wrFix.changes });
+
+  if (syncSheet && fixes.length) {
+    // Re-sync all affected sessions to the Sheet
+    const allKeys = [...new Set(fixes.map(f => f.key))];
+    const pH = allKeys.map(() => '?').join(',');
+    const sessions = db.prepare(`SELECT * FROM sessions WHERE checklist_key IN (${pH})`).all(...allKeys);
+    let synced = 0;
+    for (const s of sessions) {
+      mirrorUpdate(s);
+      synced++;
+    }
+    return { ok: true, fixed: fixes, totalSynced: synced };
+  }
+  return { ok: true, fixed: fixes };
 };
 
 module.exports = { H, _getSession, _parseJSON, _unitsForKey };

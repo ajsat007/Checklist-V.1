@@ -37,7 +37,8 @@ const ALLOWED = new Set([
   'getMyReports', 'getSupervisorReports', 'getMyReportsPaged', 'getSessionDetail', 'getReportFullDetail',
   'generateSessionPdf', 'generatePdfNow', 'regeneratePDFForSession', 'getSessionPdf',
   'searchReports', 'searchPastInspections', 'peekContinuationSession',
-  'fixPartialShiftSessions'
+  'fixPartialShiftSessions',
+  'fixChecklistTypes'
 ]);
 
 const MIME = {
