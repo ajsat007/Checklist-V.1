@@ -1,7 +1,7 @@
 /* =====================================================================
    report.js — builds the printable Marathi inspection report as HTML.
    PDF download uses pdfmake 0.2.x with embedded Noto Sans Devanagari
-   woff2 fonts (zero external services, works offline after first load).
+   TTF fonts (zero external services).
    ===================================================================== */
 'use strict';
 
@@ -232,7 +232,6 @@ function _pdfShiftTable(row) {
   widths.push(42);
 
   const body = [];
-  // header
   const hdr = [
     _pc('अ.\nक्र.', { alignment: 'center', bold: true, fontSize: 8 }),
     _pc('कामाचा तपशील', { bold: true, fontSize: 8.5 }),
@@ -258,7 +257,7 @@ function _pdfShiftTable(row) {
   });
 
   return {
-    table: { widths, body, dontBreakRows: true, headerRows: 1 },
+    table: { widths, body, dontBreakRows: false, headerRows: 1 },
     layout: _gridLayout(),
     fontSize: 8.5
   };
@@ -270,17 +269,24 @@ function _pdfBusTable(row) {
   const questions = FALLBACK_QUESTIONS[key] || [];
   const buses = _parseJSON(row.buses_json, []);
   const n = buses.length;
+  const qCount = questions.length;
 
-  const widths = [18, 55];
-  for (let i = 0; i < questions.length; i++) widths.push(30);
-  widths.push(35);
+  // Scale font sizes and widths based on data volume
+  const isDense = n > 15 || qCount >= 6;
+  const colW = isDense ? 24 : 30;
+  const hFontSize = isDense ? 6.5 : 7;
+  const rFontSize = isDense ? 7 : 8;
+
+  const widths = [14, 48];
+  for (let i = 0; i < qCount; i++) widths.push(colW);
+  widths.push(30);
 
   const body = [];
   const hdr = [
-    _pc('अ.\nक्र.', { alignment: 'center', bold: true, fontSize: 8 }),
-    _pc('बस क्रमांक', { alignment: 'center', bold: true, fontSize: 8 }),
-    ...questions.map(q => _pc(q, { alignment: 'center', bold: true, fontSize: 7 })),
-    _pc('शेरा', { alignment: 'center', bold: true, fontSize: 8 })
+    _pc('अ.\nक्र.', { alignment: 'center', bold: true, fontSize: hFontSize }),
+    _pc('बस क्रमांक', { alignment: 'center', bold: true, fontSize: hFontSize }),
+    ...questions.map(q => _pc(q, { alignment: 'center', bold: true, fontSize: hFontSize })),
+    _pc('शेरा', { alignment: 'center', bold: true, fontSize: hFontSize })
   ];
   body.push(hdr);
 
@@ -288,11 +294,11 @@ function _pdfBusTable(row) {
   (buses || []).forEach((b, idx) => {
     const nk = normUnit(b.busNumber);
     seen[nk] = (seen[nk] || 0) + 1;
-    const label = b.busNumber + (seen[nk] > 1 ? ' (पुन्हा ' + mn(seen[nk]) + ')' : '');
+    const label = (b.busNumber || '') + (seen[nk] > 1 ? ' (पुन्हा ' + mn(seen[nk]) + ')' : '');
     const remarks = [];
     const cells = [
-      _pc(mn(idx + 1), { alignment: 'center', fontSize: 8 }),
-      _pc(label, { alignment: 'center', bold: true, fontSize: 8 })
+      _pc(mn(idx + 1), { alignment: 'center', fontSize: rFontSize }),
+      _pc(label, { alignment: 'center', bold: true, fontSize: rFontSize })
     ];
     questions.forEach((q, i) => {
       const a = (b.answers || {})[q] || '';
@@ -300,7 +306,7 @@ function _pdfBusTable(row) {
       if (rm && remarks.indexOf(mn(i + 1) + ': ' + rm) === -1) remarks.push(mn(i + 1) + ': ' + rm);
       cells.push(_ansCell(a));
     });
-    cells.push(_pc(remarks.join(', '), { fontSize: 7, color: '#b91c1c', italics: true }));
+    cells.push(_pc(remarks.join(', '), { fontSize: 6, color: '#b91c1c', italics: true }));
     body.push(cells);
   });
 
@@ -309,9 +315,9 @@ function _pdfBusTable(row) {
   }
 
   return {
-    table: { widths, body, dontBreakRows: true, headerRows: 1 },
+    table: { widths, body, dontBreakRows: false, headerRows: 1 },
     layout: _gridLayout(),
-    fontSize: 8
+    fontSize: rFontSize
   };
 }
 
@@ -342,7 +348,7 @@ function _pdfSingleTable(row) {
   });
 
   return {
-    table: { widths: [22, '*', 60, 50], body, dontBreakRows: true, headerRows: 1 },
+    table: { widths: [22, '*', 60, 50], body, dontBreakRows: false, headerRows: 1 },
     layout: _gridLayout(),
     fontSize: 8.5
   };
@@ -382,18 +388,16 @@ function _pdfSigBlock(key, row) {
   const s = SIG_LABELS[key] || { left: 'पर्यवेक्षक\nनाव\nस्वाक्षरी', right: 'स्थानक प्रमुख\nनाव\nस्वाक्षरी' };
   const leftName = row.supervisor_name || '';
   const leftId = row.employee_id || '';
-  // Build signature boxes as bordered paragraphs
   const leftTxt = s.left.replace('नाव-', 'नाव-' + (leftName ? ' ' + leftName + (leftId ? ' (' + leftId + ')' : '') : ''))
                          .replace(/(^|\n)नाव(\n|$)/, (m, a, b) => a + 'नाव-' + (leftName ? ' ' + leftName + (leftId ? ' (' + leftId + ')' : '') : '') + b);
   const rightTxt = s.right;
-  // Use a 2-column table with borders
   return {
     table: {
       widths: ['*', '*'],
       body: [
         [
-          { text: leftTxt.replace(/\n/g, '\n'), margin: [4, 4, 4, 4], fontSize: 9.5, height: 60 },
-          { text: rightTxt.replace(/\n/g, '\n'), margin: [4, 4, 4, 4], fontSize: 9.5, height: 60 }
+          { text: leftTxt.split('\n').filter(Boolean).join('\n'), margin: [4, 4, 4, 4], fontSize: 9.5, height: 60 },
+          { text: rightTxt.split('\n').filter(Boolean).join('\n'), margin: [4, 4, 4, 4], fontSize: 9.5, height: 60 }
         ]
       ]
     },
@@ -498,9 +502,6 @@ function buildReport(sessionId, autoPrint, options) {
     '<button class="dl-btn" id="pdfDlBtn">📥 PDF डाउनलोड करा</button>' +
     '</div>' +
     '<script src="/js/pdfmake.min.js"><\/script>' +
-    // pdfMake.createPdf(dd, tableLayouts, fonts, vfs) — built-in wrapper
-    // that internally does new Document(...) and calls .createPdf()
-    // We pass fonts+VFS as the 3rd and 4th args so our Devanagari TTF is used
     '<script>' +
     'var _PDF_DD=' + ddJson + ';' +
     'var _PDF_VFS={' +
@@ -515,16 +516,32 @@ function buildReport(sessionId, autoPrint, options) {
         "bolditalics:'NotoSansDevanagari-Bold.ttf'" +
       '}' +
     '};' +
-    'document.getElementById("pdfDlBtn").onclick=function(){' +
-      'var btn=this;btn.disabled=true;btn.textContent="⏳ PDF तयार होत आहे...";' +
+    'function _dlPDF(){' +
+      'var btn=document.getElementById("pdfDlBtn");if(!btn)return;' +
+      'btn.disabled=true;btn.textContent="\\u23f3 PDF \\u0924\\u092f\\u093e\\u0930 \\u0939\\u094b\\u0924 \\u0906\\u0939\\u0947...";' +
       'try{' +
-        'pdfMake.createPdf(_PDF_DD, null, _PDF_FONTS, _PDF_VFS).download("' + tokenSafe + '.pdf");' +
-        'setTimeout(function(){btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा";},2500);' +
+        'if(typeof pdfMake==="undefined"||!pdfMake.createPdf)throw new Error("PDF library not loaded");' +
+        'pdfMake.createPdf(_PDF_DD,null,_PDF_FONTS,_PDF_VFS).download("' + tokenSafe + '.pdf");' +
+        'setTimeout(function(){btn.disabled=false;btn.textContent="\\uD83d\\udce5 PDF \\u0921\\u093e\\u0909\\u0928\\u0932\\u094b\\u0921 \\u0915\\u0930\\u093e";},3000);' +
       '}catch(e){' +
-        'alert("PDF त्रुटी: "+e.message);' +
-        'btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा";' +
+        'console.error("PDF_DL:",e);' +
+        'btn.textContent="\\u274c PDF \\u0924\\u094d\\u0930\\u0941\\u091f\\u0940 - \\u092a\\u0943\\u0937\\u094d\\u0920 \\u0930\\u093f\\u092b\\u094d\\u0930\\u0947\\u0936 \\u0915\\u0930\\u093e";' +
+        'btn.style.background="#b91c1c";' +
+        'setTimeout(function(){' +
+          'btn.disabled=false;' +
+          'btn.textContent="\\uD83d\\udce5 PDF \\u0921\\u093e\\u0909\\u0928\\u0932\\u094b\\u0921 \\u0915\\u0930\\u093e";' +
+          'btn.style.background="";' +
+        '},5000);' +
       '}' +
-    '};' +
+    '}' +
+    'setTimeout(function(){' +
+      'var b=document.getElementById("pdfDlBtn");if(!b)return;' +
+      'if(typeof pdfMake==="undefined"||!pdfMake.createPdf){' +
+        'b.textContent="\\u274c PDF \\u0932\\u093e\\u092f\\u092c\\u094d\\u0930\\u0947\\u0930\\u0940 \\u0924\\u094d\\u0930\\u0941\\u091f\\u0940";' +
+        'b.style.background="#b91c1c";' +
+      '}' +
+      'b.onclick=_dlPDF;' +
+    '},100);' +
     '<\/script>';
 
   const html =
