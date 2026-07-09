@@ -213,7 +213,8 @@ function _pdfShiftTable(row) {
 
   for (var qi2 = 0; qi2 < questions.length; qi2++) {
     var q2 = questions[qi2];
-    var remarks2 = [];
+    var rawRm = [];
+    var dedupRm = [];
     var cells2 = [
       _pc(mn(qi2 + 1), { alignment: 'center', fontSize: 8.5 }),
       _pc(q2, { fontSize: 8.5 }),
@@ -224,10 +225,29 @@ function _pdfShiftTable(row) {
       var remarksObj2 = u && u.remarks ? u.remarks : {};
       var a2 = answers2[q2] || '';
       var rm2 = remarksObj2[q2];
-      if (rm2) remarks2.push(mn(qi2 + 1) + ': ' + String(rm2));
+      if (rm2) {
+        var rmStr = String(rm2);
+        rawRm.push(rmStr);
+        if (dedupRm.indexOf(rmStr) === -1) dedupRm.push(rmStr);
+      }
       cells2.push(_ansCell(a2));
     }
-    cells2.push(_pc(remarks2.join(', '), { fontSize: 7, color: '#b91c1c', italics: true }));
+    // Dedup: if all shifts have same remark text, show once; else show unique texts
+    var displayRm2 = '';
+    if (dedupRm.length === 1) {
+      displayRm2 = dedupRm[0];
+    } else if (rawRm.length > 0) {
+      var seen2 = [];
+      for (var si = 0; si < present.length; si++) {
+        var shiftName = present[si].shiftName || '';
+        if (shiftName && rawRm[si]) {
+          var entry = shiftName + ': ' + rawRm[si];
+          if (seen2.indexOf(entry) === -1) seen2.push(entry);
+        }
+      }
+      displayRm2 = seen2.join(', ');
+    }
+    cells2.push(_pc(displayRm2, { fontSize: 7, color: '#b91c1c', italics: true }));
     body.push(cells2);
   }
 
