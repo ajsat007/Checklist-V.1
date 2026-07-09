@@ -521,8 +521,15 @@ function buildReport(sessionId, autoPrint, options) {
       'btn.disabled=true;btn.textContent="\\u23f3 PDF \\u0924\\u092f\\u093e\\u0930 \\u0939\\u094b\\u0924 \\u0906\\u0939\\u0947...";' +
       'try{' +
         'if(typeof pdfMake==="undefined"||!pdfMake.createPdf)throw new Error("PDF library not loaded");' +
-        'pdfMake.createPdf(_PDF_DD,null,_PDF_FONTS,_PDF_VFS).download("' + tokenSafe + '.pdf");' +
-        'setTimeout(function(){btn.disabled=false;btn.textContent="\\uD83d\\udce5 PDF \\u0921\\u093e\\u0909\\u0928\\u0932\\u094b\\u0921 \\u0915\\u0930\\u093e";},3000);' +
+        'var pdfDoc=pdfMake.createPdf(_PDF_DD,null,_PDF_FONTS,_PDF_VFS);' +
+        'pdfDoc.getBlob(function(blob){' +
+          'var url=URL.createObjectURL(blob);' +
+          'var a=document.createElement("a");a.href=url;a.download="' + tokenSafe + '.pdf";' +
+          'document.body.appendChild(a);a.click();a.remove();' +
+          'setTimeout(function(){URL.revokeObjectURL(url);},10000);' +
+          'btn.disabled=false;btn.textContent="\\u2705 PDF \\u0921\\u093e\\u0909\\u0928\\u0932\\u094b\\u0921 \\u091d\\u093e\\u0932\\u0947!";' +
+          'setTimeout(function(){btn.textContent="\\uD83d\\udce5 PDF \\u0921\\u093e\\u0909\\u0928\\u0932\\u094b\\u0921 \\u0915\\u0930\\u093e";},3000);' +
+        '});' +
       '}catch(e){' +
         'console.error("PDF_DL:",e);' +
         'btn.textContent="\\u274c PDF \\u0924\\u094d\\u0930\\u0941\\u091f\\u0940 - \\u092a\\u0943\\u0937\\u094d\\u0920 \\u0930\\u093f\\u092b\\u094d\\u0930\\u0947\\u0936 \\u0915\\u0930\\u093e";' +
