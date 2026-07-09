@@ -295,6 +295,8 @@ function _saveBus(sessionId, busNumber, answers, remarks, isRepeat, originalBusN
   }
   db.prepare('UPDATE sessions SET buses_json=?, total_buses=?, last_updated=? WHERE session_id=?')
     .run(JSON.stringify(buses), buses.length, _istParts().full, sessionId);
+  // Diagnostic trace
+  _log('BUS_SAVED', sessionId, { bus: busNumber, totalSave: buses.length, repeat: !!isRepeat });
   return buses;
 }
 

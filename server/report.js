@@ -80,9 +80,8 @@ table.grid th { background:#f0f2f5; text-align:center; font-weight:700; }
   .info td, .grid td, .grid th, .dand td, .dand th, .sigwrap td { font-size:9px !important; }
   .grid { page-break-inside:auto; }
   thead { display:table-header-group; }
-  tr { page-break-inside:avoid; }
   .dand, .sigwrap { page-break-inside:avoid; }
-  [style*="overflow-x:auto"] { overflow:visible !important; }
+  [style*="overflow-x:auto"] { overflow:visible !important; max-height:none !important; height:auto !important; }
 }
 `;
 
@@ -163,12 +162,15 @@ function busTable(row) {
   const key = row.checklist_key;
   const questions = FALLBACK_QUESTIONS[key] || [];
   const buses = _parseJSON(row.buses_json, []);
+  const n = buses.length;
   const dense = questions.length >= 8 ? ' style="font-size:8px"' : '';
   let head = '<tr><th style="width:5%">अ.क्र.</th><th style="width:15%">बस क्रमांक</th>';
   questions.forEach((q, i) => { head += '<th' + dense + '>' + esc(q) + '</th>'; });
   head += '<th style="width:12%">शेरा</th></tr>';
   const seen = {};
   let body = '';
+  // Diagnostic: log actual bus count to server console
+  if (typeof console !== 'undefined') console.log('[pdf] busTable session=' + (row.token_id || row.session_id) + ' buses=' + n + ' questions=' + questions.length);
   buses.forEach((b, idx) => {
     const nk = normUnit(b.busNumber);
     seen[nk] = (seen[nk] || 0) + 1;
@@ -205,6 +207,15 @@ function buildReport(sessionId, autoPrint, options) {
   }
 
   const forPdf = options && options.forPdf;
+
+  // Count validation for bus sessions
+  if (row.checklist_key === 'bw' || (CHECKLIST_META[row.checklist_key] || {}).mode === 'bus') {
+    const buses = _parseJSON(row.buses_json, []);
+    if (row.total_buses !== buses.length) {
+      console.warn('[pdf] BUS COUNT MISMATCH! session=' + row.session_id + ' total_buses_col=' + row.total_buses + ' actual_json=' + buses.length);
+    }
+    console.log('[pdf] buildReport session=' + row.session_id + ' mode=bus buses_json=' + buses.length + ' total_buses_field=' + row.total_buses);
+  }
 
   const toolbarHtml = forPdf ? '' :
     '<div class="toolbar">' +
