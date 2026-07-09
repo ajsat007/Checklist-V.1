@@ -112,8 +112,9 @@ const server = http.createServer(async (req, res) => {
       const rawId = url.slice('/report/'.length, q === -1 ? undefined : q);
 
       // Check for /report/:id/pdf route (one-click PDF download)
-      if (rawId.endsWith('/pdf')) {
-        const sessionId = rawId.slice(0, -4); // remove /pdf suffix
+      const cleanRawId = rawId.split('?')[0]; // strip query params
+      if (cleanRawId.endsWith('/pdf')) {
+        const sessionId = cleanRawId.slice(0, -4); // remove /pdf suffix
         try {
           const pdfBuf = await generatePdf(decodeURIComponent(sessionId));
           const row = require('./handlers')._getSession(sessionId);
