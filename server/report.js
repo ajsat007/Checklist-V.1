@@ -255,7 +255,7 @@ function _pdfShiftTable(row) {
   });
 
   return {
-    table: { widths, body, dontBreakRows: false, headerRows: 1 },
+    table: { widths, body, dontBreakRows: true, headerRows: 1 },
     layout: _gridLayout(),
     fontSize: 8.5
   };
@@ -306,9 +306,9 @@ function _pdfBusTable(row) {
   }
 
   return {
-    table: { widths, body, dontBreakRows: false, headerRows: 1 },
+    table: { widths, body, dontBreakRows: true, headerRows: 1 },
     layout: _gridLayout(),
-    fontSize: 8.5
+    fontSize: 8
   };
 }
 
@@ -339,7 +339,7 @@ function _pdfSingleTable(row) {
   });
 
   return {
-    table: { widths: [22, '*', 60, 50], body, dontBreakRows: false, headerRows: 1 },
+    table: { widths: [22, '*', 60, 50], body, dontBreakRows: true, headerRows: 1 },
     layout: _gridLayout(),
     fontSize: 8.5
   };
@@ -455,10 +455,13 @@ function _pdfDd(row) {
 
   const footerTxt = 'टोकन: ' + token + '  |  ' + APP.APP_NAME + '  |  ' + timeDisp;
 
+  const isBusMode = mode === 'bus';
   return {
     pageSize: 'A4',
-    pageMargins: [18, 18, 18, 18],
-    defaultStyle: { font: 'NotoSansDevanagari', fontSize: 9 },
+    pageOrientation: isBusMode ? 'landscape' : undefined,
+    pageMargins: isBusMode ? [12, 14, 12, 14] : [18, 18, 18, 18],
+    compress: true,
+    defaultStyle: { font: 'NotoSansDevanagari', fontSize: isBusMode ? 8 : 9 },
     content: [
       ...headerStack,
       contentBody,
@@ -491,22 +494,21 @@ function buildReport(sessionId, autoPrint, options) {
     '<div class="toolbar">' +
     '<button class="dl-btn" id="pdfDlBtn">📥 PDF डाउनलोड करा</button>' +
     '</div>' +
-    // VFS and fonts MUST be set BEFORE pdfmake loads (reads them once at init)
-    '<script>window.pdfMake={vfs:{' +
-      "'NotoSansDevanagari-Regular.ttf':'" + FONT_REGULAR + "'," +
-      "'NotoSansDevanagari-Bold.ttf':'" + FONT_BOLD + "'" +
-    '},fonts:{' +
+    '<script src="/js/pdfmake.min.js"><\/script>' +
+    '<script>' +
+    'pdfMake.fonts={' +
       'NotoSansDevanagari:{' +
         "normal:'NotoSansDevanagari-Regular.ttf'," +
         "bold:'NotoSansDevanagari-Bold.ttf'," +
         "italics:'NotoSansDevanagari-Regular.ttf'," +
         "bolditalics:'NotoSansDevanagari-Bold.ttf'" +
       '}' +
-    '}};' +
+    '};' +
+    'pdfMake.vfs={' +
+      "'NotoSansDevanagari-Regular.ttf':'" + FONT_REGULAR + "'," +
+      "'NotoSansDevanagari-Bold.ttf':'" + FONT_BOLD + "'" +
+    '};' +
     'var _PDF_DD=' + ddJson + ';' +
-    '<\/script>' +
-    '<script src="/js/pdfmake.min.js"><\/script>' +
-    '<script>' +
     'document.getElementById("pdfDlBtn").onclick=function(){' +
       'var btn=this;btn.disabled=true;btn.textContent="⏳ PDF तयार होत आहे...";' +
       'try{' +
