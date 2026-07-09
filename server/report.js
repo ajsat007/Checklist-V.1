@@ -495,6 +495,9 @@ function buildReport(sessionId, autoPrint, options) {
     '<button class="dl-btn" id="pdfDlBtn">📥 PDF डाउनलोड करा</button>' +
     '</div>' +
     '<script src="/js/pdfmake.min.js"><\/script>' +
+    // pdfMake.createPdf(dd, tableLayouts, fonts, vfs) — built-in wrapper
+    // that internally does new Document(...) and calls .createPdf()
+    // We pass fonts+VFS as the 3rd and 4th args so our Devanagari TTF is used
     '<script>' +
     'var _PDF_DD=' + ddJson + ';' +
     'var _PDF_VFS={' +
@@ -512,8 +515,7 @@ function buildReport(sessionId, autoPrint, options) {
     'document.getElementById("pdfDlBtn").onclick=function(){' +
       'var btn=this;btn.disabled=true;btn.textContent="⏳ PDF तयार होत आहे...";' +
       'try{' +
-        'var pdfDoc = new pdfMake(_PDF_DD, null, _PDF_FONTS, _PDF_VFS);' +
-        'pdfDoc.createPdf().download("' + tokenSafe + '.pdf");' +
+        'pdfMake.createPdf(_PDF_DD, null, _PDF_FONTS, _PDF_VFS).download("' + tokenSafe + '.pdf");' +
         'setTimeout(function(){btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा";},2500);' +
       '}catch(e){' +
         'alert("PDF त्रुटी: "+e.message);' +
