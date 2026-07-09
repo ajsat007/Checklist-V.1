@@ -1,8 +1,8 @@
 /* =====================================================================
    server.js — the whole backend (Node >= 22.13).
      POST /exec              { fn, args } -> dispatch to a whitelisted handler
-     GET  /report/:id        printable Marathi inspection report with
-                             client-side pdfmake PDF download
+     GET  /report/:id        printable Marathi inspection report
+                             (use Print → Save as PDF)
      GET  /*                 static SPA files from ../public
    Run:  node server/server.js     (or: npm start)
    ===================================================================== */
@@ -104,7 +104,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // ---- GET /report/:id : printable report (with client-side pdfmake PDF) ----
+  // ---- GET /report/:id : printable report (Print → Save as PDF) ----
   if (req.method === 'GET' && url.startsWith('/report/')) {
     try {
       const q = url.indexOf('?');
