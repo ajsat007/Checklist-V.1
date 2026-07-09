@@ -142,6 +142,7 @@ function _pdfBusTable(row) {
     var label = busNum + (seen[nk] > 1 ? ' (' + mn(seen[nk]) + ')' : '');
 
     var remarks = [];
+    var remarkTexts = [];
     var cells = [
       _pc(mn(bi + 1), { alignment: 'center', fontSize: rFS }),
       _pc(label, { alignment: 'center', bold: true, fontSize: rFS }),
@@ -152,10 +153,26 @@ function _pdfBusTable(row) {
       var remarksObj = b && b.remarks ? b.remarks : {};
       var a = answers[q] || '';
       var rm = remarksObj[q];
-      if (rm) remarks.push('Q' + mn(qi + 1) + ': ' + String(rm));
+      if (rm) {
+        var rmStr = String(rm);
+        remarks.push(rmStr);
+        if (remarkTexts.indexOf(rmStr) === -1) remarkTexts.push(rmStr);
+      }
       cells.push(_ansCell(a));
     }
-    cells.push(_pc(remarks.join(', '), { fontSize: 6, color: '#b91c1c', italics: true }));
+    // Dedup: if all same text, show once without Q-prefix; otherwise show unique texts with Q-prefix
+    var displayRm = '';
+    if (remarkTexts.length === 1) {
+      displayRm = remarkTexts[0];
+    } else if (remarks.length > 0) {
+      var seen = [];
+      for (var ri = 0; ri < remarks.length; ri++) {
+        var label2 = 'Q' + mn(ri + 1) + ': ' + remarks[ri];
+        if (seen.indexOf(label2) === -1) seen.push(label2);
+      }
+      displayRm = seen.join(', ');
+    }
+    cells.push(_pc(displayRm, { fontSize: 6, color: '#b91c1c', italics: true }));
     body.push(cells);
   }
 
