@@ -11,11 +11,11 @@ const cfg = require('./checklist-config');
 const { CHECKLIST_META, CHECKLIST_TITLES, FALLBACK_QUESTIONS, PENALTIES, SIG_LABELS, SHIFTS, WEEKS, APP } = cfg;
 const { _getSession, _parseJSON } = require('./handlers');
 
-/* ---- embedded font base64 (woff2, read once at boot) ---- */
+/* ---- embedded font base64 (TTF, read once at boot) ---- */
 const _FONT_DIR = path.resolve(__dirname, '..', 'public', 'fonts');
 function _b64(name) { return fs.readFileSync(path.join(_FONT_DIR, name)).toString('base64'); }
-const FONT_400 = _b64('noto-sans-devanagari-devanagari-400-normal.woff2');
-const FONT_700 = _b64('noto-sans-devanagari-devanagari-700-normal.woff2');
+const FONT_REGULAR = _b64('NotoSansDevanagari-Regular.ttf');
+const FONT_BOLD = _b64('NotoSansDevanagari-Bold.ttf');
 
 /* ---- helpers ---- */
 const DEV_DIGITS = ['०','१','२','३','४','५','६','७','८','९'];
@@ -491,34 +491,32 @@ function buildReport(sessionId, autoPrint, options) {
     '<div class="toolbar">' +
     '<button class="dl-btn" id="pdfDlBtn">📥 PDF डाउनलोड करा</button>' +
     '</div>' +
-    '<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.12/pdfmake.min.js"><\/script>' +
-    '<script>\n' +
-    // Register custom Devanagari font
-    'pdfMake.vfs = {\n' +
-      "'NotoSansDevanagari-Regular.woff2':'" + FONT_400 + "',\n" +
-      "'NotoSansDevanagari-Bold.woff2':'" + FONT_700 + "'\n" +
-    '};\n' +
-    'pdfMake.fonts = {\n' +
-      'NotoSansDevanagari:{\n' +
-        "normal:'NotoSansDevanagari-Regular.woff2',\n" +
-        "bold:'NotoSansDevanagari-Bold.woff2',\n" +
-        "italics:'NotoSansDevanagari-Regular.woff2',\n" +
-        "bolditalics:'NotoSansDevanagari-Bold.woff2'\n" +
-      '}\n' +
-    '};\n' +
-    // Pre-built document definition
-    'var _PDF_DD=' + ddJson + ';\n' +
-    // Download handler
-    'document.getElementById("pdfDlBtn").onclick=function(){\n' +
-      'var btn=this;btn.disabled=true;btn.textContent="⏳ PDF तयार होत आहे...";\n' +
-      'try{\n' +
-        'pdfMake.createPdf(_PDF_DD).download("' + tokenSafe + '.pdf");\n' +
-        'setTimeout(function(){btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा";},2500);\n' +
-      '}catch(e){\n' +
-        'alert("PDF त्रुटी: "+e.message);\n' +
-        'btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा";\n' +
-      '}\n' +
-    '};\n' +
+    // VFS and fonts MUST be set BEFORE pdfmake loads (reads them once at init)
+    '<script>window.pdfMake={vfs:{' +
+      "'NotoSansDevanagari-Regular.ttf':'" + FONT_REGULAR + "'," +
+      "'NotoSansDevanagari-Bold.ttf':'" + FONT_BOLD + "'" +
+    '},fonts:{' +
+      'NotoSansDevanagari:{' +
+        "normal:'NotoSansDevanagari-Regular.ttf'," +
+        "bold:'NotoSansDevanagari-Bold.ttf'," +
+        "italics:'NotoSansDevanagari-Regular.ttf'," +
+        "bolditalics:'NotoSansDevanagari-Bold.ttf'" +
+      '}' +
+    '}};' +
+    'var _PDF_DD=' + ddJson + ';' +
+    '<\/script>' +
+    '<script src="/js/pdfmake.min.js"><\/script>' +
+    '<script>' +
+    'document.getElementById("pdfDlBtn").onclick=function(){' +
+      'var btn=this;btn.disabled=true;btn.textContent="⏳ PDF तयार होत आहे...";' +
+      'try{' +
+        'pdfMake.createPdf(_PDF_DD).download("' + tokenSafe + '.pdf");' +
+        'setTimeout(function(){btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा";},2500);' +
+      '}catch(e){' +
+        'alert("PDF त्रुटी: "+e.message);' +
+        'btn.disabled=false;btn.textContent="📥 PDF डाउनलोड करा";' +
+      '}' +
+    '};' +
     '<\/script>';
 
   const html =
