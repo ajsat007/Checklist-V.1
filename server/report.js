@@ -60,7 +60,7 @@ table.grid th { background:#f0f2f5; text-align:center; font-weight:700; }
 .guide-close:hover { background:#0a2f52; }
 .guide-hint { font-size:10px; color:#aaa; text-align:center; margin:10px 0 0; cursor:pointer; text-decoration:underline; }
 @media print {
-  .toolbar, .guide-overlay, #printGuide { display:none !important; }
+  .toolbar, .guide-overlay, #printGuide, .dl-hint { display:none !important; }
   body { padding:0; margin:0; }
   .sheet { border:none; padding:0; max-width:none; margin:0; box-shadow:none; }
   .info td, .grid td, .grid th, .dand td, .dand th, .sigwrap td { font-size:9px !important; }
@@ -196,7 +196,7 @@ function buildReport(sessionId, autoPrint, options) {
     '<div class="toolbar">' +
     '<button class="dl-btn" onclick="window.print()">📥 PDF म्हणून जतन करा</button>' +
     '</div>' +
-    '<div style="text-align:center;max-width:1000px;margin:4px auto;color:#888;font-size:11px;line-height:1.5">' +
+    '<div class="dl-hint" style="text-align:center;max-width:1000px;margin:4px auto;color:#888;font-size:11px;line-height:1.5">' +
     'वरील बटणावर क्लिक करा — <a href="#" onclick="document.getElementById(\'guideModal\').style.display=\'flex\';return false" style="color:#0b3d6e">मोबाईलमध्ये PDF कसे डाउनलोड करायचे?</a></div>' +
     '<div class="guide-overlay" id="guideModal">' +
       '<div class="guide-card">' +
