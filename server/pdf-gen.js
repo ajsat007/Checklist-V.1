@@ -21,10 +21,10 @@ function _b64(name) {
 const FONT_REGULAR = _b64('NotoSansDevanagari-Regular.ttf') || _b64('NotoSansDevanagari-Regular.woff2') || '';
 const FONT_BOLD   = _b64('NotoSansDevanagari-Bold.ttf')   || _b64('NotoSansDevanagari-Bold.woff2')   || '';
 
-/* =========== pdfmake sandbox (warm once at boot) =========== */
+/* =========== pdfmake sandbox (lazy init at first call) =========== */
 const PDFMAKE_CODE = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'pdfmake.min.js'), 'utf8');
 
-function _buildSandbox(ctxFontReg, ctxFontBold) {
+function _buildSandbox() {
   const sandbox = {};
   const GLOBALS = [
     'Uint8Array','Uint16Array','Uint32Array','Int8Array','Int16Array','Int32Array',
@@ -42,66 +42,43 @@ function _buildSandbox(ctxFontReg, ctxFontBold) {
   sandbox.window   = sandbox;
   sandbox.document = { createElement: () => ({}), body: { appendChild: () => {} }, createElementNS: () => ({}) };
   sandbox.navigator = { userAgent: 'Node' };
-
   const ctx = vm.createContext(sandbox);
   vm.runInContext(PDFMAKE_CODE, ctx, { timeout: 15000 });
-
-  // Warm up: generate a tiny doc so fontkit initialises
-  const warmFonts = {
-    NotoSansDevanagari: {
-      normal: 'NotoSansDevanagari-Regular.ttf', bold: 'NotoSansDevanagari-Bold.ttf',
-      italics: 'NotoSansDevanagari-Regular.ttf', bolditalics: 'NotoSansDevanagari-Bold.ttf',
-    },
-  };
-  const warmVfs = {
-    'NotoSansDevanagari-Regular.ttf': ctxFontReg,
-    'NotoSansDevanagari-Bold.ttf': ctxFontBold,
-  };
+  // Warm up
   try {
-    ctx.pdfMake.createPdf(
+    const w = ctx.pdfMake.createPdf(
       { pageSize: 'A4', content: [{ text: 'w', fontSize: 8 }], defaultStyle: { font: 'NotoSansDevanagari' } },
-      null, warmFonts, warmVfs,
-    ).getBase64(() => { /* warm */ });
-  } catch (_) { /* warmup non-fatal */ }
+      null,
+      { NotoSansDevanagari: { normal: 'NotoSansDevanagari-Regular.ttf', bold: 'NotoSansDevanagari-Bold.ttf', italics: 'NotoSansDevanagari-Regular.ttf', bolditalics: 'NotoSansDevanagari-Bold.ttf' } },
+      { 'NotoSansDevanagari-Regular.ttf': FONT_REGULAR, 'NotoSansDevanagari-Bold.ttf': FONT_BOLD }
+    );
+    w.getBase64(function() { /* warm */ });
+  } catch (_) { /* non-fatal */ }
   return ctx;
 }
 
 let SANDBOX = null;
-
-/** Lazily initialise the sandbox so module-require never throws. */
 function _getSandbox() {
   if (!SANDBOX) {
-    if (!FONT_REGULAR || !FONT_BOLD) throw new Error('Font data not loaded — check public/fonts/');
-    SANDBOX = _buildSandbox(FONT_REGULAR, FONT_BOLD);
+    if (!FONT_REGULAR || !FONT_BOLD) throw new Error('Font data not loaded');
+    SANDBOX = _buildSandbox();
   }
   return SANDBOX;
 }
 
 /* =========== helpers =========== */
 const DEV_DIGITS = ['०','१','२','३','४','५','६','७','८','९'];
-function mn(n) {
-  return String(n == null ? 0 : n).replace(/[0-9]/g, d => DEV_DIGITS[+d]);
-}
-function esc(s) {
-  return String(s == null ? '' : s);
-}
+function mn(n) { return String(n == null ? 0 : n).replace(/[0-9]/g, function(d) { return DEV_DIGITS[+d]; }); }
 function normUnit(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+function _safeArray(val) { const a = _parseJSON(val, []); return Array.isArray(a) ? a : []; }
 
-/* Safely parse JSON array — never return non-array */
-function _safeArray(val) {
-  const arr = _parseJSON(val, []);
-  return Array.isArray(arr) ? arr : [];
-}
-
-/* =========== pdfmake cell builder =========== */
 function _pc(text, opts) {
   if (text == null) text = '';
-  const cell = { text: String(text) };
-  if (opts) Object.assign(cell, opts);
+  var cell = { text: String(text) };
+  if (opts) { for (var k in opts) cell[k] = opts[k]; }
   return cell;
 }
 
-/* Answer cell with green/red colouring */
 function _ansCell(a) {
   if (!a) return _pc('', { alignment: 'center' });
   return _pc(a, {
@@ -110,128 +87,135 @@ function _ansCell(a) {
   });
 }
 
-/* Grid table layout for all tables — uses pdfmake default grid for borders
-   (which draws proper all-around cell lines) plus header row fill. */
+/* Grid table layout — ALL callbacks use regular function() NOT arrow functions
+   because pdfmake checks arguments.length internally for grid line rendering. */
 function _gridLayout() {
   return {
-    // pdfmake default: grid lines on all sides, thin borders
-    // We only override fillColor for header row; borders use default grid behavior
+    hLineWidth: function() { return 0.55; },
+    vLineWidth: function() { return 0.55; },
+    hLineColor: function() { return '#555555'; },
+    vLineColor: function() { return '#555555'; },
     fillColor: function(i) { return i === 0 ? '#e8ecf0' : null; },
     paddingLeft: function() { return 4; },
     paddingRight: function() { return 4; },
     paddingTop: function() { return 3; },
     paddingBottom: function() { return 3; },
-    hLineWidth: function(i) { return i === 1 ? 1.0 : 0.55; },
-    vLineWidth: function() { return 0.6; },
-    hLineColor: function() { return '#444444'; },
-    vLineColor: function() { return '#444444'; },
   };
 }
 
 /* =========== Bus-mode table =========== */
 function _pdfBusTable(row) {
-  const questions = FALLBACK_QUESTIONS[row.checklist_key] || [];
-  const buses = _safeArray(row.buses_json);
-  const n = buses.length;
-  const qCount = questions.length;
+  var questions = FALLBACK_QUESTIONS[row.checklist_key] || [];
+  var buses = _safeArray(row.buses_json);
+  var n = buses.length;
+  var qCount = questions.length;
 
-  // Dynamically scale fonts/widths based on data volume
-  const isDense = n > 18 || qCount >= 6;
-  const hFS = isDense ? 6.5 : 7.5;
-  const rFS = isDense ? 7 : 8;
-  const colW = Math.min(36, Math.max(20, Math.floor(isDense ? 24 : 34)));
-  const firstW = Math.min(16, Math.max(10, Math.floor(n >= 100 ? 12 : 14)));
-  const busW  = Math.min(55, Math.max(38, Math.floor(n >= 100 ? 42 : 48)));
+  // Proportional widths: '*' for question columns so they fill page width
+  var isDense = n > 18 || qCount >= 6;
+  var hFS = isDense ? 7 : 8;
+  var rFS = isDense ? 7.5 : 8.5;
+  var snFS = isDense ? 6.5 : 7.5;
 
-  const widths = [firstW, busW];
-  for (let i = 0; i < qCount; i++) widths.push(colW);
-  widths.push(Math.min(34, Math.max(22, colW + 4)));
+  var widths = [16, 50];
+  for (var i = 0; i < qCount; i++) widths.push('*');
+  widths.push(28);
 
-  const body = [];
+  var body = [];
   // Header row
-  body.push([
+  var hdr = [
     _pc('अ.\nक्र.', { alignment: 'center', bold: true, fontSize: hFS }),
-    _pc('बस क्रमांक', { alignment: 'center', bold: true, fontSize: hFS }),
-    ...questions.map(q => _pc(q, { alignment: 'center', bold: true, fontSize: hFS })),
-    _pc('शेरा', { alignment: 'center', bold: true, fontSize: hFS }),
-  ]);
+    _pc('बस\nक्रमांक', { alignment: 'center', bold: true, fontSize: hFS }),
+  ];
+  for (var hi = 0; hi < questions.length; hi++) {
+    hdr.push(_pc(questions[hi], { alignment: 'center', bold: true, fontSize: snFS }));
+  }
+  hdr.push(_pc('शेरा', { alignment: 'center', bold: true, fontSize: hFS }));
+  body.push(hdr);
 
   // Data rows
-  const seen = {};
-  (buses || []).forEach((b, idx) => {
-    const busNum = b && b.busNumber ? String(b.busNumber) : '';
-    const nk = normUnit(busNum);
+  var seen = {};
+  for (var bi = 0; bi < buses.length; bi++) {
+    var b = buses[bi];
+    var busNum = b && b.busNumber ? String(b.busNumber) : '';
+    var nk = normUnit(busNum);
     seen[nk] = (seen[nk] || 0) + 1;
-    const label = busNum + (seen[nk] > 1 ? ' (' + mn(seen[nk]) + ')' : '');
+    var label = busNum + (seen[nk] > 1 ? ' (' + mn(seen[nk]) + ')' : '');
 
-    const remarks = [];
-    const cells = [
-      _pc(mn(idx + 1), { alignment: 'center', fontSize: rFS }),
+    var remarks = [];
+    var cells = [
+      _pc(mn(bi + 1), { alignment: 'center', fontSize: rFS }),
       _pc(label, { alignment: 'center', bold: true, fontSize: rFS }),
     ];
-    (questions || []).forEach((q, qi) => {
-      const answers = b && b.answers ? b.answers : {};
-      const remarksObj = b && b.remarks ? b.remarks : {};
-      const a = answers[q] || '';
-      const rm = remarksObj[q];
-      if (rm) remarks.push(mn(qi + 1) + ': ' + String(rm));
+    for (var qi = 0; qi < questions.length; qi++) {
+      var q = questions[qi];
+      var answers = b && b.answers ? b.answers : {};
+      var remarksObj = b && b.remarks ? b.remarks : {};
+      var a = answers[q] || '';
+      var rm = remarksObj[q];
+      if (rm) remarks.push('Q' + mn(qi + 1) + ': ' + String(rm));
       cells.push(_ansCell(a));
-    });
+    }
     cells.push(_pc(remarks.join(', '), { fontSize: 6, color: '#b91c1c', italics: true }));
     body.push(cells);
-  });
+  }
 
-  if (!n) {
+  if (n === 0) {
     body.push([_pc('— नोंद नाही —', { colSpan: 3 + qCount, alignment: 'center', fontSize: 9 })]);
   }
 
   return {
-    table: { widths, body, dontBreakRows: false, headerRows: 1 },
+    table: { widths: widths, body: body, dontBreakRows: false, headerRows: 1 },
     layout: _gridLayout(),
     fontSize: rFS,
-    // Dynamic table will auto-split across pages — no height cap needed
   };
 }
 
 /* =========== Shift-mode table =========== */
 function _pdfShiftTable(row) {
-  const questions = FALLBACK_QUESTIONS[row.checklist_key] || [];
-  const units = _safeArray(row.shifts_json);
-  const present = (units || []).filter(u => u && u.shiftName);
-  const n = present.length;
-
-  const widths = [22, '*'];
-  for (let i = 0; i < n; i++) widths.push(Math.max(38, Math.min(56, 56 - n * 3)));
+  var questions = FALLBACK_QUESTIONS[row.checklist_key] || [];
+  var units = _safeArray(row.shifts_json);
+  var present = [];
+  for (var ui = 0; ui < units.length; ui++) {
+    if (units[ui] && units[ui].shiftName) present.push(units[ui]);
+  }
+  var n = present.length;
+  var widths = [22, '*'];
+  for (var i = 0; i < n; i++) widths.push(Math.max(38, Math.min(56, 56 - n * 3)));
   widths.push(42);
 
-  const body = [];
-  body.push([
+  var body = [];
+  var hdr = [
     _pc('अ.\nक्र.', { alignment: 'center', bold: true, fontSize: 8 }),
     _pc('कामाचा तपशील', { bold: true, fontSize: 8.5 }),
-    ...present.map(u => _pc(u.shiftName, { alignment: 'center', bold: true, fontSize: 8 })),
-    _pc('शेरा', { alignment: 'center', bold: true, fontSize: 8 }),
-  ]);
+  ];
+  for (var ui2 = 0; ui2 < present.length; ui2++) {
+    hdr.push(_pc(present[ui2].shiftName, { alignment: 'center', bold: true, fontSize: 8 }));
+  }
+  hdr.push(_pc('शेरा', { alignment: 'center', bold: true, fontSize: 8 }));
+  body.push(hdr);
 
-  questions.forEach((q, i) => {
-    const remarks = [];
-    const cells = [
-      _pc(mn(i + 1), { alignment: 'center', fontSize: 8.5 }),
-      _pc(q, { fontSize: 8.5 }),
+  for (var qi2 = 0; qi2 < questions.length; qi2++) {
+    var q2 = questions[qi2];
+    var remarks2 = [];
+    var cells2 = [
+      _pc(mn(qi2 + 1), { alignment: 'center', fontSize: 8.5 }),
+      _pc(q2, { fontSize: 8.5 }),
     ];
-    present.forEach(u => {
-      const answers = u && u.answers ? u.answers : {};
-      const remarksObj = u && u.remarks ? u.remarks : {};
-      const a = answers[q] || '';
-      const rm = remarksObj[q];
-      if (rm) remarks.push(mn(i + 1) + ': ' + String(rm));
-      cells.push(_ansCell(a));
-    });
-    cells.push(_pc(remarks.join(', '), { fontSize: 7, color: '#b91c1c', italics: true }));
-    body.push(cells);
-  });
+    for (var ui3 = 0; ui3 < present.length; ui3++) {
+      var u = present[ui3];
+      var answers2 = u && u.answers ? u.answers : {};
+      var remarksObj2 = u && u.remarks ? u.remarks : {};
+      var a2 = answers2[q2] || '';
+      var rm2 = remarksObj2[q2];
+      if (rm2) remarks2.push(mn(qi2 + 1) + ': ' + String(rm2));
+      cells2.push(_ansCell(a2));
+    }
+    cells2.push(_pc(remarks2.join(', '), { fontSize: 7, color: '#b91c1c', italics: true }));
+    body.push(cells2);
+  }
 
   return {
-    table: { widths, body, dontBreakRows: false, headerRows: 1 },
+    table: { widths: widths, body: body, dontBreakRows: false, headerRows: 1 },
     layout: _gridLayout(),
     fontSize: 8.5,
   };
@@ -239,32 +223,33 @@ function _pdfShiftTable(row) {
 
 /* =========== Single-mode table =========== */
 function _pdfSingleTable(row) {
-  const questions = FALLBACK_QUESTIONS[row.checklist_key] || [];
-  const units = _safeArray(row.shifts_json);
-  const unit = units[0] || {};
+  var questions = FALLBACK_QUESTIONS[row.checklist_key] || [];
+  var units = _safeArray(row.shifts_json);
+  var unit = units[0] || {};
 
-  const body = [[
+  var body = [[
     _pc('अ.क्र.', { alignment: 'center', bold: true, fontSize: 8.5 }),
     _pc('कामाचा तपशील', { bold: true, fontSize: 8.5 }),
     _pc('काम केले\nआहे/नाही', { alignment: 'center', bold: true, fontSize: 8 }),
     _pc('शेरा', { alignment: 'center', bold: true, fontSize: 8.5 }),
   ]];
 
-  questions.forEach((q, i) => {
-    const answers = unit.answers || {};
-    const remarks = unit.remarks || {};
-    const a = answers[q] || '';
-    const rm = remarks[q] || '';
+  for (var qi = 0; qi < questions.length; qi++) {
+    var q = questions[qi];
+    var answers = unit.answers || {};
+    var remarks = unit.remarks || {};
+    var a = answers[q] || '';
+    var rm = remarks[q] || '';
     body.push([
-      _pc(mn(i + 1), { alignment: 'center', fontSize: 8.5 }),
+      _pc(mn(qi + 1), { alignment: 'center', fontSize: 8.5 }),
       _pc(q, { fontSize: 8.5 }),
       _ansCell(a),
       _pc(String(rm), { fontSize: 7.5, color: '#b91c1c', italics: true }),
     ]);
-  });
+  }
 
   return {
-    table: { widths: [22, '*', 60, 50], body, dontBreakRows: false, headerRows: 1 },
+    table: { widths: [22, '*', 60, 50], body: body, dontBreakRows: false, headerRows: 1 },
     layout: _gridLayout(),
     fontSize: 8.5,
   };
@@ -272,26 +257,27 @@ function _pdfSingleTable(row) {
 
 /* =========== Penalty table =========== */
 function _pdfPenaltyTable(key) {
-  const list = PENALTIES[key] || [];
-  const body = [[
+  var list = PENALTIES[key] || [];
+  var body = [[
     _pc('अ. क्र.', { alignment: 'center', bold: true, fontSize: 8.5 }),
     _pc('दंडात्मक तरतूद', { bold: true, fontSize: 8.5 }),
     _pc('दंड रु.', { alignment: 'center', bold: true, fontSize: 8.5 }),
   ]];
-  (list || []).forEach((p, i) => {
+  for (var i = 0; i < list.length; i++) {
+    var p = list[i];
     body.push([
       _pc(mn(i + 1), { alignment: 'center', fontSize: 8.5 }),
       _pc((p.desc || '') + ' (रु.' + mn(p.amt || 0) + '/-)', { fontSize: 8.5 }),
       _pc('', { alignment: 'center' }),
     ]);
-  });
+  }
   body.push([
     _pc('', {}),
     _pc('एकूण दंड रु.', { alignment: 'right', bold: true, fontSize: 8.5 }),
     _pc(mn(0), { alignment: 'center', bold: true, fontSize: 8.5 }),
   ]);
   return {
-    table: { widths: [26, '*', 40], body },
+    table: { widths: [26, '*', 40], body: body },
     layout: _gridLayout(),
     margin: [0, 6, 0, 0],
   };
@@ -299,16 +285,17 @@ function _pdfPenaltyTable(key) {
 
 /* =========== Signature block =========== */
 function _pdfSigBlock(key, row) {
-  const s = SIG_LABELS[key] || {
+  var s = SIG_LABELS[key] || {
     left: 'पर्यवेक्षक\nनाव\nस्वाक्षरी',
     right: 'स्थानक प्रमुख\nनाव\nस्वाक्षरी',
   };
-  const leftName = row.supervisor_name || '';
-  const leftId   = row.employee_id || '';
-  const leftTxt = (s.left || '')
+  var leftName = row.supervisor_name || '';
+  var leftId = row.employee_id || '';
+  var leftTxt = (s.left || '')
     .replace('नाव-', 'नाव-' + (leftName ? ' ' + leftName + (leftId ? ' (' + leftId + ')' : '') : ''))
-    .replace(/(^|\n)नाव(\n|$)/, (m, a, b) =>
-      a + 'नाव-' + (leftName ? ' ' + leftName + (leftId ? ' (' + leftId + ')' : '') : '') + b);
+    .replace(/(^|\n)नाव(\n|$)/, function(m, a, b) {
+      return a + 'नाव-' + (leftName ? ' ' + leftName + (leftId ? ' (' + leftId + ')' : '') : '') + b;
+    });
 
   return {
     table: {
@@ -319,10 +306,14 @@ function _pdfSigBlock(key, row) {
       ]],
     },
     layout: {
-      hLineWidth: () => 0.5, vLineWidth: () => 0.5,
-      hLineColor: () => '#333', vLineColor: () => '#333',
-      paddingLeft: () => 4, paddingRight: () => 4,
-      paddingTop: () => 4, paddingBottom: () => 4,
+      hLineWidth: function() { return 0.5; },
+      vLineWidth: function() { return 0.5; },
+      hLineColor: function() { return '#333'; },
+      vLineColor: function() { return '#333'; },
+      paddingLeft: function() { return 4; },
+      paddingRight: function() { return 4; },
+      paddingTop: function() { return 4; },
+      paddingBottom: function() { return 4; },
     },
     margin: [0, 10, 0, 0],
   };
@@ -330,14 +321,14 @@ function _pdfSigBlock(key, row) {
 
 /* =========== Top-level document definition =========== */
 function _buildDd(row) {
-  const mode = (CHECKLIST_META[row.checklist_key] || {}).mode || 'shift';
-  const title = CHECKLIST_TITLES[row.checklist_key] || row.checklist_type || '';
-  const dateDisp = String(row.created_date || '').trim();
-  const token = row.token_id || '';
-  const timeDisp = row.created_time || '';
-  const isBus = mode === 'bus';
+  var mode = (CHECKLIST_META[row.checklist_key] || {}).mode || 'shift';
+  var title = CHECKLIST_TITLES[row.checklist_key] || row.checklist_type || '';
+  var dateDisp = String(row.created_date || '').trim();
+  var token = row.token_id || '';
+  var timeDisp = row.created_time || '';
+  var isBus = mode === 'bus';
 
-  const headerStack = [
+  var headerStack = [
     { text: 'महाराष्ट्र राज्य मार्ग परिवहन महामंडळ', style: 'org' },
     { text: APP.APP_NAME, style: 'sub', margin: [0, 0, 0, 4] },
     {
@@ -355,17 +346,21 @@ function _buildDd(row) {
         ],
       },
       layout: {
-        hLineWidth: () => 0.5, vLineWidth: () => 0.5,
-        hLineColor: () => '#999', vLineColor: () => '#999',
-        paddingLeft: () => 3, paddingRight: () => 3,
-        paddingTop: () => 2, paddingBottom: () => 2,
+        hLineWidth: function() { return 0.5; },
+        vLineWidth: function() { return 0.5; },
+        hLineColor: function() { return '#999'; },
+        vLineColor: function() { return '#999'; },
+        paddingLeft: function() { return 3; },
+        paddingRight: function() { return 3; },
+        paddingTop: function() { return 2; },
+        paddingBottom: function() { return 2; },
       },
       margin: [0, 0, 0, 4],
     },
     { text: title, style: 'title' },
   ];
 
-  let contentBody;
+  var contentBody;
   if (mode === 'bus')         contentBody = _pdfBusTable(row);
   else if (mode === 'single') contentBody = _pdfSingleTable(row);
   else                        contentBody = _pdfShiftTable(row);
@@ -374,7 +369,6 @@ function _buildDd(row) {
     pageSize: 'A4',
     pageOrientation: isBus ? 'landscape' : undefined,
     pageMargins: isBus ? [12, 14, 12, 14] : [18, 18, 18, 18],
-    compress: true,
     defaultStyle: { font: 'NotoSansDevanagari', fontSize: isBus ? 8 : 9 },
     content: [
       ...headerStack,
@@ -397,51 +391,48 @@ function _buildDd(row) {
 /**
  * Generate a PDF buffer for a session, with auto-retry and timeout.
  * @param {string} sessionId
- * @param {object} [opts]            Optional overrides.
- * @param {number} [opts.timeoutMs]  Max ms to wait (default 30 000).
- * @param {number} [opts.retries]    Max retries on failure (default 1).
+ * @param {object} [opts]
+ * @param {number} [opts.timeoutMs]  Max ms (default 30000)
+ * @param {number} [opts.retries]    Max retries (default 1)
  * @returns {Promise<Buffer>}
  */
 async function generatePdf(sessionId, opts) {
-  const timeoutMs = (opts && opts.timeoutMs) || 30000;
-  const maxRetries = (opts && opts.retries != null) ? opts.retries : 1;
+  var timeoutMs = (opts && opts.timeoutMs) || 30000;
+  var maxRetries = (opts && opts.retries != null) ? opts.retries : 1;
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+  for (var attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const result = await _generateOnce(sessionId, timeoutMs);
-      // Validate output
+      var result = await _generateOnce(sessionId, timeoutMs);
       if (!Buffer.isBuffer(result) || result.length < 10) {
-        throw new Error('Generated PDF is too small (' + (result ? result.length : 0) + ' bytes)');
+        throw new Error('Generated PDF invalid size (' + (result ? result.length : 0) + ' bytes)');
       }
       if (result.slice(0, 5).toString() !== '%PDF-') {
-        throw new Error('Generated output is not a valid PDF (magic bytes mismatch)');
+        throw new Error('Generated output not a valid PDF');
       }
       return result;
     } catch (err) {
       if (attempt >= maxRetries) throw err;
-      console.warn('[pdf-gen] attempt ' + (attempt + 1) + '/' + (maxRetries + 1) + ' failed for ' + sessionId + ': ' + err.message);
-      // Brief back-off before retry
-      await new Promise(r => setTimeout(r, 1000 + attempt * 500));
+      console.warn('[pdf-gen] attempt ' + (attempt + 1) + ' failed for ' + sessionId + ': ' + err.message);
+      await new Promise(function(r) { setTimeout(r, 1000 + attempt * 500); });
     }
   }
-  // Unreachable, but keeps TS happy
-  throw new Error('PDF generation failed after ' + (maxRetries + 1) + ' attempts');
+  throw new Error('PDF generation failed');
 }
 
 function _generateOnce(sessionId, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const row = _getSession(sessionId);
+  return new Promise(function(resolve, reject) {
+    var row = _getSession(sessionId);
     if (!row) return reject(new Error('Session not found: ' + sessionId));
 
-    let timedOut = false;
-    const timer = setTimeout(() => {
+    var timedOut = false;
+    var timer = setTimeout(function() {
       timedOut = true;
       reject(new Error('PDF generation timed out after ' + timeoutMs + 'ms'));
     }, timeoutMs);
 
     try {
-      const dd = _buildDd(row);
-      const fonts = {
+      var dd = _buildDd(row);
+      var fonts = {
         NotoSansDevanagari: {
           normal: 'NotoSansDevanagari-Regular.ttf',
           bold: 'NotoSansDevanagari-Bold.ttf',
@@ -449,20 +440,19 @@ function _generateOnce(sessionId, timeoutMs) {
           bolditalics: 'NotoSansDevanagari-Bold.ttf',
         },
       };
-      const vfs = {
+      var vfs = {
         'NotoSansDevanagari-Regular.ttf': FONT_REGULAR,
         'NotoSansDevanagari-Bold.ttf': FONT_BOLD,
       };
 
-      const sandbox = _getSandbox();
-      const doc = sandbox.pdfMake.createPdf(dd, null, fonts, vfs);
+      var sandbox = _getSandbox();
+      var doc = sandbox.pdfMake.createPdf(dd, null, fonts, vfs);
 
-      doc.getBase64(function (data) {
-        if (timedOut) return; // already rejected
+      doc.getBase64(function(data) {
+        if (timedOut) return;
         clearTimeout(timer);
         try {
-          const buf = Buffer.from(data, 'base64');
-          resolve(buf);
+          resolve(Buffer.from(data, 'base64'));
         } catch (e) { reject(e); }
       });
     } catch (e) {
