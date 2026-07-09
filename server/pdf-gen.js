@@ -110,14 +110,21 @@ function _ansCell(a) {
   });
 }
 
-/* Grid table layout for all tables */
+/* Grid table layout for all tables — uses pdfmake default grid for borders
+   (which draws proper all-around cell lines) plus header row fill. */
 function _gridLayout() {
   return {
-    hLineWidth: () => 0.5, vLineWidth: () => 0.5,
-    hLineColor: () => '#333', vLineColor: () => '#333',
-    fillColor: i => (i === 0 ? '#f0f2f5' : null),
-    paddingLeft: () => 3, paddingRight: () => 3,
-    paddingTop: () => 2, paddingBottom: () => 2,
+    // pdfmake default: grid lines on all sides, thin borders
+    // We only override fillColor for header row; borders use default grid behavior
+    fillColor: function(i) { return i === 0 ? '#e8ecf0' : null; },
+    paddingLeft: function() { return 4; },
+    paddingRight: function() { return 4; },
+    paddingTop: function() { return 3; },
+    paddingBottom: function() { return 3; },
+    hLineWidth: function(i) { return i === 1 ? 1.0 : 0.55; },
+    vLineWidth: function() { return 0.6; },
+    hLineColor: function() { return '#444444'; },
+    vLineColor: function() { return '#444444'; },
   };
 }
 
