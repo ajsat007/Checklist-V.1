@@ -1,8 +1,8 @@
 /* =====================================================================
    server.js — the whole backend (Node >= 22.13).
      POST /exec              { fn, args } -> dispatch to a whitelisted handler
-     GET  /report/:id        printable Marathi inspection report (Print -> PDF)
-     GET  /report/:id/download   server-rendered PDF (via Browserless.io)
+     GET  /report/:id        printable Marathi inspection report with
+                             client-side pdfmake PDF download
      GET  /*                 static SPA files from ../public
    Run:  node server/server.js     (or: npm start)
    ===================================================================== */
@@ -15,14 +15,12 @@ const fs   = require('fs');
 const seed = require('./seed');
 const { H } = require('./handlers');
 const { buildReport } = require('./report');
-const { renderSessionPDF, closeBrowser } = require('./pdf');
 const db = require('./db');
 const { loadFromSheet } = require('./sheet-sync');
 const { sheetsEnabled } = require('./sheets');
 
 // Seed sample master data on first boot (idempotent).
 seed();
-require('./pdf').warmup();
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PORT = process.env.PORT || 3000;
@@ -96,7 +94,7 @@ const server = http.createServer(async (req, res) => {
       if (!ALLOWED.has(fn) || typeof H[fn] !== 'function') {
         return send(res, 200, JSON.stringify({ ok: false, msg: 'Function not allowed: ' + fn }));
       }
-      const result = await H[fn].apply(null, args);   // handlers may be async (Sheet mirror)
+      const result = await H[fn].apply(null, args);
       return send(res, 200, typeof result === 'string' ? result : JSON.stringify(result));
     } catch (err) {
       console.error('[exec]', err);
@@ -104,31 +102,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // ---- GET /report/:id/download : real PDF via Browserless.io ----
-  // Must be checked BEFORE the plain /report/:id route below.
-  if (req.method === 'GET' && url.startsWith('/report/') && url.split('?')[0].endsWith('/download')) {
-    const path0 = url.split('?')[0];
-    const id = decodeURIComponent(path0.slice('/report/'.length, path0.length - '/download'.length));
-    try {
-      const baseUrl = 'http://127.0.0.1:' + PORT;
-      const pdfBuf = await renderSessionPDF(id, baseUrl);
-      const row = require('./handlers')._getSession(id);
-      const safeName = ((row && row.token_id) || id).replace(/[^A-Za-z0-9_\-]/g, '_') + '.pdf';
-      res.writeHead(200, {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': 'attachment; filename="' + safeName + '"',
-        'Content-Length': pdfBuf.length,
-        'Cache-Control': 'no-store'
-      });
-      return res.end(pdfBuf);
-    } catch (err) {
-      console.error('[pdf]', err);
-      return send(res, 500, 'PDF generation failed: ' + (err && err.message ? err.message : err), 'text/plain');
-    }
-  }
-
-  // ---- GET /report/:id : printable report (viewable in-browser; add ?pdf=1
-  //      for the bare version with no toolbar, used internally by pdf.js) ----
+  // ---- GET /report/:id : printable report (with client-side pdfmake PDF) ----
   if (req.method === 'GET' && url.startsWith('/report/')) {
     const q = url.indexOf('?');
     const id = decodeURIComponent(url.slice('/report/'.length, q === -1 ? undefined : q));
@@ -194,13 +168,10 @@ const server = http.createServer(async (req, res) => {
   });
 })();
 
-// Close on shutdown (kept as a no-op call since pdf.js no longer runs a
-// browser, but harmless to leave in case a future PDF approach needs it).
+// Shutdown handler.
 ['SIGTERM', 'SIGINT'].forEach((sig) => {
-  process.on(sig, async () => {
+  process.on(sig, () => {
     console.log('[shutdown] ' + sig + ' received, closing server...');
-    server.close();
-    await closeBrowser();
-    process.exit(0);
+    server.close(() => process.exit(0));
   });
 });
