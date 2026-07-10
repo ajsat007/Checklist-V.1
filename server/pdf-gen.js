@@ -116,7 +116,7 @@ function _pdfBusTable(row) {
   var rFS = isDense ? 7.5 : 8.5;
   var snFS = isDense ? 6.5 : 7.5;
 
-  var widths = [16, 50];
+  var widths = [16, 60];
   for (var i = 0; i < qCount; i++) widths.push('*');
   widths.push(28);
 
@@ -145,7 +145,7 @@ function _pdfBusTable(row) {
     var remarkTexts = [];
     var cells = [
       _pc(mn(bi + 1), { alignment: 'center', fontSize: rFS }),
-      _pc(label, { alignment: 'center', bold: true, fontSize: rFS }),
+      _pc(label, { alignment: 'center', bold: true, fontSize: rFS, noWrap: true }),
     ];
     for (var qi = 0; qi < questions.length; qi++) {
       var q = questions[qi];
@@ -460,6 +460,14 @@ function _generateOnce(sessionId, timeoutMs) {
   return new Promise(function(resolve, reject) {
     var row = _getSession(sessionId);
     if (!row) return reject(new Error('Session not found: ' + sessionId));
+
+    // Count validation: warn if total_buses column doesn't match actual JSON array length
+    if (row.checklist_key === 'bw' || (CHECKLIST_META[row.checklist_key] || {}).mode === 'bus') {
+      var _busesChk = _safeArray(row.buses_json);
+      if (row.total_buses !== _busesChk.length) {
+        console.warn('[pdf-gen] BUS COUNT MISMATCH for ' + (row.token_id || sessionId) + ': DB field says ' + row.total_buses + ' but JSON has ' + _busesChk.length + ' buses. Using actual JSON data.');
+      }
+    }
 
     var timedOut = false;
     var timer = setTimeout(function() {
